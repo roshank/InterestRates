@@ -257,8 +257,10 @@
     const events = T.events.map((p) => Object.assign({}, BY_ID[p.id], { scale: p.scale }));
 
     let spendTemp = 0, gapShock = 0, infShock = 0, fedShift = 0, impulse = 0;
+    const drivers = [];
     for (const ev of events) {
       const f = ev.fx, k = ev.scale;
+      if (f.gap) drivers.push({ label: ev.title, v: f.gap * k });
       st.spend += (f.spend || 0) * k;
       st.revenueAdj += (f.revenue || 0) * k;
       spendTemp += (f.spendTemp || 0) * k;
@@ -277,21 +279,32 @@
     impulse -= st.lastSpendTemp;
     st.lastSpendTemp = spendTemp;
 
-    // Economy
+    // Economy. Interest rates work with a lag: last term's rates weigh on
+    // this term, and this term's Fed move hits part of the way right away.
     const prevGap = st.gap, prevFed = st.fedRate;
     const realRate = st.fedRate - st.inf;
-    st.gap = clamp(
-      0.45 * prevGap + gapShock - 0.35 * (realRate - R_STAR) - 0.25 * (st.y10 - LONG_NEUTRAL) +
-      0.3 * impulse + 0.5 * T.noise.gap, -8, 6);
+    const policy = -0.45 * (realRate - R_STAR);
+    const longRates = -0.25 * (st.y10 - LONG_NEUTRAL);
+    const fiscal = 0.3 * impulse;
+    st.gap = clamp(0.45 * prevGap + gapShock + policy + longRates + fiscal + 0.5 * T.noise.gap, -8, 6);
     st.inf = clamp(0.45 * st.inf + 0.55 * INF_TARGET + 0.3 * st.gap + infShock + 0.3 * T.noise.inf, -1.5, 12);
-    st.growth = clamp(1.8 + (st.gap - prevGap) / YEARS, -6, 8);
-    st.unemp = clamp(4.2 - 0.5 * st.gap, 2.8, 14);
 
     // Fed: a Taylor-style rule, smoothed, with a little noise and surprises.
     const target = fedTarget(st.inf, st.gap);
     st.fedRate = roundFed(0.35 * prevFed + 0.65 * target + 0.25 * T.noise.fed + fedShift);
+    const fedNow = -0.35 * (st.fedRate - prevFed);
+    st.gap = clamp(st.gap + fedNow, -8, 6);
+    st.growth = clamp(1.8 + (st.gap - prevGap) / YEARS, -6, 8);
+    st.unemp = clamp(4.2 - 0.5 * st.gap, 2.8, 14);
     const bs = st.gap < -2 && st.fedRate <= 1.0 ? 'QE' : st.inf > 3 ? 'QT' : 'Steady';
     const fedReason = describeFed(prevFed, st.fedRate, st.inf, st.unemp, fedShift);
+
+    const fedTotal = policy + fedNow;
+    drivers.push({ label: fedTotal < 0 ? 'Tight Fed policy' : 'Easy Fed policy', v: fedTotal });
+    drivers.push({ label: longRates < 0 ? 'High long-term rates (mortgages, loans)' : 'Low long-term rates (mortgages, loans)', v: longRates });
+    drivers.push({ label: fiscal > 0 ? 'Bigger deficits boosting demand' : 'Spending cuts or tax hikes', v: fiscal });
+    const econDrivers = drivers.filter((d) => Math.abs(d.v) >= 0.25)
+      .sort((a, b) => Math.abs(b.v) - Math.abs(a.v)).slice(0, 3);
 
     // Budget
     const rev = revenuePct(st, st.gap);
@@ -314,7 +327,7 @@
       congress: FIRST_CONGRESS + t,
       years: [START_YEAR + t * YEARS, START_YEAR + t * YEARS + YEARS - 1],
       events,
-      econ: { growth: st.growth, inf: st.inf, unemp: st.unemp, gap: st.gap },
+      econ: { growth: st.growth, inf: st.inf, unemp: st.unemp, gap: st.gap, drivers: econDrivers },
       fed: { rate: st.fedRate, prev: prevFed, reason: fedReason, bs },
       budget: { spendPct: spendNow, revenuePct: rev, primaryPct, deficitPct: (primary + interest) / gdpAvg / YEARS * 100 },
       need: { primary, interest, rollShort, rollLong, total: need },
@@ -421,11 +434,11 @@
   }
 
   const TP_LABELS = {
-    supply: 'the amount of long bonds you sold',
-    debt: 'the rising debt load',
+    supply: 'your bond supply vs. demand',
+    debt: 'debt load',
     inflation: 'inflation uncertainty',
-    burden: 'worries about the interest burden',
-    shock: 'market turmoil from events',
+    burden: 'interest-burden worries',
+    shock: 'event turmoil',
   };
 
   function debrief({ st, b, auction, longShare, prevY10, prevY1, prevTp, prevExp, prevIntRev }) {
@@ -435,7 +448,7 @@
     if (auction.failed) {
       lines.push({ tone: 'bad', text: 'Failed auction. You offered ' + fmt(auction.L) + ' of 10-year bonds but buyers only wanted about ' + fmt(auction.capL) + '. Dealers were stuck with the rest, yields spiked, and markets will remember. (' + st.strikes + ' of ' + MAX_STRIKES + ' strikes)' });
     } else if (auction.pressureL > 0.1) {
-      lines.push({ tone: 'warn', text: 'The 10-year auction tailed. You sold ' + fmt(auction.L) + ' into about ' + fmt(auction.capL) + ' of demand, so buyers demanded about ' + auction.tailBp + ' basis points of extra yield.' });
+      lines.push({ tone: 'warn', text: 'The 10-year auction tailed. You sold ' + fmt(auction.L) + ' into about ' + fmt(auction.capL) + ' of demand, so buyers demanded about ' + auction.tailBp + ' basis points of extra yield. Without that, the 10-year would have cleared near ' + (st.y10 - st.tp.supply).toFixed(2) + '%.' });
     } else if (auction.pressureL < -0.15) {
       lines.push({ tone: 'good', text: 'Strong 10-year auction. Buyers wanted about ' + fmt(auction.capL) + ' and you sold only ' + fmt(auction.L) + ', so they competed and kept yields low.' });
     } else {
@@ -445,22 +458,23 @@
       lines.push({ tone: 'warn', text: 'You leaned hard on bills: ' + fmt(auction.S) + ' outstanding against about ' + fmt(auction.capS) + ' of demand. Bill yields rose above the Fed rate to attract buyers.' });
     }
 
-    // 10-year decomposition
+    // 10-year decomposition: every piece of the move, so a tail can't hide
+    // behind a market-wide rally (or vice versa).
     const d10 = st.y10 - prevY10;
-    const dExp = st.expPath - prevExp;
-    const dTp = st.tp.total - prevTp.total;
     if (Math.abs(d10) >= 0.1) {
-      let driver = null, best = 0;
-      for (const k of Object.keys(TP_LABELS)) {
-        const dk = st.tp[k] - prevTp[k];
-        if (Math.abs(dk) > Math.abs(best)) { best = dk; driver = k; }
+      // Market forces are changes; your own supply effect is shown as this
+      // turn's level next to last turn's, so a tail is always visible.
+      const parts = [{ k: 'expected Fed path', v: st.expPath - prevExp }];
+      for (const k of Object.keys(TP_LABELS)) if (k !== 'supply') parts.push({ k: TP_LABELS[k], v: st.tp[k] - prevTp[k] });
+      const shown = parts.filter((p) => Math.abs(p.v) >= 0.05).sort((a, b) => Math.abs(b.v) - Math.abs(a.v));
+      let text = 'The 10-year ' + (d10 > 0 ? 'rose ' : 'fell ') + Math.abs(d10).toFixed(2) + ' pts to ' + st.y10.toFixed(2) + '%.';
+      if (shown.length) text += ' Market forces: ' + shown.map((p) => p.k + ' ' + sign(p.v)).join(', ') + '.';
+      const supNow = st.tp.supply, supPrev = prevTp.supply;
+      if (Math.abs(supNow) >= 0.05 || Math.abs(supPrev) >= 0.05) {
+        text += ' Your bond supply: ' + sign(supNow) + ' this turn (' + sign(supPrev) + ' last turn).';
       }
-      const dir = d10 > 0 ? 'rose' : 'fell';
-      let text = 'The 10-year yield ' + dir + ' ' + Math.abs(d10).toFixed(2) + ' pts to ' + st.y10.toFixed(2) + '%. ';
-      text += 'Expected Fed path: ' + sign(dExp) + ' pts. Term premium: ' + sign(dTp) + ' pts';
-      if (driver && Math.abs(best) >= 0.1) text += ', mostly from ' + TP_LABELS[driver];
-      text += '.';
       if (st.fedRate < b.fed.prev && d10 > 0.1) text += ' The Fed cut, yet long rates rose. The Fed only controls the short end.';
+      if (supNow > 0.1 && d10 < 0) text += ' Your oversupply still cost you; the market just fell by more.';
       lines.push({ tone: d10 > 0 ? 'warn' : 'good', text });
     } else {
       lines.push({ tone: 'neutral', text: 'The 10-year yield barely moved, ending at ' + st.y10.toFixed(2) + '%.' });

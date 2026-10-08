@@ -70,6 +70,7 @@
       (big ? '<h2>' : '<h3>') + esc(e.title) + (big ? '</h2>' : '</h3>') +
       '<p class="text">' + esc(e.text) + '</p>' +
       '<p class="lesson"><b>Why it matters:</b> ' + esc(e.lesson) + '</p>' +
+      (big && e.example ? '<p class="example"><span class="label">Real world</span> ' + esc(e.example) + '</p>' : '') +
       '</article>';
   }
 
@@ -162,7 +163,9 @@
       stat('Jobless', b.econ.unemp, b.econ.unemp - prev.unemp) +
       stat('Fed rate', b.fed.rate, b.fed.rate - b.fed.prev) +
       '</div>' +
-      '<p class="fedline"><span>' + esc(b.fed.reason) + '</span> <span class="pill ' + bsTone + '">' + bsText + '</span></p>';
+      '<p class="fedline"><span>' + esc(b.fed.reason) + '</span> <span class="pill ' + bsTone + '">' + bsText + '</span></p>' +
+      (b.econ.drivers.length ? '<p class="drivers"><span class="label">Moving the economy</span>' +
+        b.econ.drivers.map((d) => '<span class="drv ' + (d.v > 0 ? 'tone-good' : 'tone-warn') + '">' + (d.v > 0 ? '▲ ' : '▼ ') + esc(d.label) + '</span>').join('') + '</p>' : '');
   }
 
   // What's publicly visible about buyers: who is leaning in or pulling back.

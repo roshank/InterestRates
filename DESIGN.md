@@ -69,7 +69,9 @@ recession, inflation shock, buyer shifts.
   debt and inflation) is drawn up front from a seed. The same seed replays the
   same world under any strategy, which makes comparisons fair.
 - **Event deck** (`js/events.js`): 23 events across Congress, Economy, World,
-  and Markets. Each has a realistic magnitude, scaled 0.75–1.25x per run.
+  and Markets, each paired with a real-world parallel (Volcker 1979–82, SVB
+  2023, the 2017 tax cuts). Each has a realistic magnitude, scaled 0.75–1.25x
+  per run.
 - **Director rules:** no event repeats back to back; most events appear at
   most once; stimulus usually follows a downturn; inflation shocks are more
   likely after big spending; recessions are likelier after booms; every run
@@ -87,7 +89,7 @@ Deliberately simple, tuned for clear cause and effect rather than precision.
 
 | Piece | Rule |
 |---|---|
-| Output gap | Persists, hit by events, pulled down by high real rates and high 10-year yields, pushed by fiscal impulse |
+| Output gap | Persists, hit by events, pulled down by last term's real rates and 10-year yields, pushed by fiscal impulse; part of this term's Fed move hits immediately |
 | Inflation | Reverts toward 2%, rises with the output gap and supply shocks |
 | Fed rate | Taylor-style rule: neutral + inflation + 0.5×(inflation gap) + 0.5×(output gap), smoothed, rounded to 25 bp; QE in deep recessions, QT when inflation is high |
 | Bill yield | Fed rate + 0.1 + a small spread if bill supply exceeds bill demand |
@@ -102,11 +104,16 @@ Across 400 random worlds:
 
 | Strategy | Survives |
 |---|---|
-| All bills | ~19% |
-| Balanced (35% long) | ~69% |
-| Mostly long (70%) | ~42% |
-| All long | ~13% |
-| Reading buyers and timing rates | ~74% |
+| All bills | ~16% |
+| Balanced (35% long) | ~62% |
+| Mostly long (70%) | ~37% |
+| All long | ~11% |
+| Reading buyers and timing rates | ~67% |
+
+Event sizes are checked against real episodes (each card names one): a
+recession takes unemployment from about 4% to 6% and growth below zero; an
+inflation surge like 2021–22 pushes inflation above 5% and the Fed to about
+6%; a Volcker-style hawk raises unemployment within the same turn.
 
 Re-check these numbers with the tests and a quick sweep after changing any
 constants.

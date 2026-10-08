@@ -129,6 +129,10 @@ header.top {
 .buyerlist { list-style: none; padding: 0; margin: 0; display: grid; gap: 4px; font-size: 14px; }
 .buyerlist b { font-weight: 600; margin-right: 4px; }
 .muted { color: var(--muted); font-size: 14px; }
+.drivers { display: flex; flex-wrap: wrap; gap: 4px 14px; align-items: baseline; font-size: 13.5px; margin-top: 2px; }
+.drivers .label { margin-right: 2px; }
+.example { font-size: 13.5px; color: var(--muted); }
+.example .label { margin-right: 6px; color: var(--ink); }
 
 /* Economy */
 .stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
@@ -213,6 +217,13 @@ table.buyers tfoot td { font-weight: 700; }
 .def { border: 1px solid var(--rule); border-radius: 4px; padding: 12px 14px; display: grid; gap: 4px; font-size: 14px; }
 .def h3 { font-size: 17px; font-weight: 800; }
 .def.b h3 { color: var(--bill); } .def.l h3 { color: var(--bond); }
+.due { display: grid; grid-template-columns: repeat(5, 1fr); gap: 3px; margin: 2px 0 4px; }
+.due i { height: 18px; border-radius: 2px; background: var(--track); position: relative; }
+.due i.on { background: currentColor; }
+.def.b .due { color: var(--bill); } .def.l .due { color: var(--bond); }
+.due i::after { content: "T" counter(t); counter-increment: t; position: absolute; inset: 0; display: grid; place-items: center; font: 500 10px var(--mono); color: var(--muted); }
+.due i.on::after { color: var(--card); }
+.due { counter-reset: t; }
 .rules { font-size: 14px; display: grid; gap: 4px; padding-left: 18px; margin: 0; }
 .seedrow { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; font-size: 13px; color: var(--muted); }
 .seedrow input { font-family: var(--mono); width: 9ch; padding: 6px 8px; border: 1px solid var(--rule); border-radius: 4px; background: var(--paper); color: var(--ink); }
@@ -262,8 +273,16 @@ table.buyers tfoot td { font-weight: 700; }
     <h2 id="introTitle">You borrow for America</h2>
     <p class="lead">Every two years, Congress needs trillions of dollars and you have to raise it. Your one decision each turn: how to split it between</p>
     <div class="defs">
-      <div class="def b"><h3>Short-term bills</h3><p>Cheap now, but come due every turn.</p></div>
-      <div class="def l"><h3>Long-term bonds</h3><p>Lock in today's rate for ten years.</p></div>
+      <div class="def b">
+        <h3>Short-term bills</h3>
+        <div class="due" aria-hidden="true"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i></div>
+        <p>Come back <b>every turn</b>. You re-borrow them, plus interest, at whatever rates are then. Cheap when rates are low.</p>
+      </div>
+      <div class="def l">
+        <h3>Long-term bonds</h3>
+        <div class="due" aria-hidden="true"><i></i><i></i><i></i><i></i><i class="on"></i></div>
+        <p>Come back after <b>5 turns</b> (10 years). The rate is locked in until then, but sell too many and buyers demand more.</p>
+      </div>
     </div>
     <p>Then watch how the Fed, world events, and bond buyers respond. Keep interest from swallowing the budget for 20 years. About five minutes.</p>
     <div class="seedrow">
