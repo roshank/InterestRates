@@ -25,9 +25,10 @@ After two or three runs, a player should be able to explain:
 
 One turn is one Congress (two years). Ten turns run from 2027 to 2047.
 
-1. **Briefing.** One or two event cards (Congress, economy, world, markets),
-   each with a one-line "why it matters." The economy updates and the Fed
-   sets its rate by rule; the player sees the result and the Fed's reason.
+1. **Briefing.** Each turn opens with a full-size briefing: one or two event
+   cards (Congress, economy, world, markets), each with a one-line "why it
+   matters," plus what the Fed just did and why. Dismissing it shrinks the
+   briefing into its panel on the desk, where it can be reopened.
 2. **The bill.** "Congress needs you to raise $X": this term's deficit
    spending, interest due, maturing bills, and maturing bonds.
 3. **One decision.** A slider splits the borrowing between:
@@ -38,7 +39,7 @@ One turn is one Congress (two years). Ten turns run from 2027 to 2047.
 
    Live gauges compare what you're selling against roughly how much buyers
    want, with a forecast ("strong demand", "likely to tail", "auction will
-   fail"). An optional 30-second clock keeps the pace up.
+   fail"). There is no timer; players can study the desk as long as they like.
 4. **Auction results.** Clearing yields for bills and bonds, tails or
    failures, and a short debrief that splits the 10-year's move into its
    expected-Fed-path part and its term-premium part, naming the biggest
@@ -55,7 +56,8 @@ or two failed auctions.
 ## Pacing
 
 Target is about five minutes per run: roughly 25 seconds per turn (5s to read,
-5–10s to decide, a few seconds of results) plus a summary. Events are much
+5–10s to decide, a few seconds of results) plus a summary. Pace comes from
+having one decision and short copy, not from a clock. Events are much
 more frequent than in real life so one run covers a full cycle: boom,
 recession, inflation shock, buyer shifts.
 

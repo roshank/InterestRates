@@ -75,7 +75,7 @@ header.top {
 .chipbtn {
   border: 1px solid var(--rule); background: var(--card); border-radius: 4px; padding: 4px 10px; font-size: 12px; cursor: pointer;
 }
-.chipbtn[aria-pressed="true"] { border-color: var(--ink); }
+.chipbtn:hover { border-color: var(--ink); }
 
 .track { display: grid; grid-template-columns: repeat(10, 1fr); gap: 3px; width: 100%; margin-bottom: 18px; }
 .track .cell {
@@ -110,6 +110,21 @@ header.top {
 .event h3 { font-size: 19px; font-weight: 800; font-stretch: 112%; }
 .event .lesson { font-size: 13.5px; color: var(--muted); border-left: 2px solid var(--rule); padding-left: 10px; max-width: 64ch; }
 .event .lesson b { color: var(--ink); font-weight: 600; }
+#brief .event .lesson { display: none; }
+.reopen { margin-top: 12px; }
+.event.big { gap: 10px; }
+.event.big h2 { font-size: clamp(28px, 5vw, 40px); font-weight: 900; font-stretch: 125%; }
+.event.big .cat {
+  justify-self: start; color: var(--paper); background: var(--ink); padding: 3px 8px; border-radius: 3px;
+}
+.event.big .text { font-size: 18px; max-width: 54ch; }
+.event.big .lesson { font-size: 15px; }
+.news { border-top-color: var(--bond); }
+.news .events { gap: 22px; }
+.news .event { padding-top: 22px; }
+.news .event:first-child { padding-top: 0; }
+.fednote { font-size: 14px; color: var(--muted); border-top: 1px solid var(--rule); padding-top: 14px; }
+.fednote .label { margin-right: 6px; color: var(--ink); }
 
 /* Economy */
 .stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
@@ -148,10 +163,6 @@ input[type=range] { width: 100%; accent-color: var(--ink); height: 28px; margin:
   font-family: var(--display); font-stretch: 112%; letter-spacing: 0.02em; font-size: 15px;
 }
 .primary:hover { filter: brightness(1.15); }
-.clock { flex: 1; min-width: 120px; }
-.clock .bar { height: 4px; background: var(--track); border-radius: 2px; overflow: hidden; }
-.clock .bar span { display: block; height: 100%; background: var(--muted); width: 100%; }
-.clock .t { font-size: 12px; color: var(--muted); font-family: var(--mono); }
 .hint { font-size: 12.5px; color: var(--muted); margin-top: 10px; max-width: 62ch; }
 
 /* Results */
@@ -220,7 +231,6 @@ table.buyers tfoot td { font-weight: 700; }
     </div>
     <div class="controls">
       <span class="label" id="seedLabel"></span>
-      <button class="chipbtn" id="clockBtn" type="button" aria-pressed="true">Clock: on</button>
       <button class="chipbtn" id="helpBtn" type="button">How to play</button>
     </div>
   </header>
@@ -242,32 +252,24 @@ table.buyers tfoot td { font-weight: 700; }
 
 <div class="overlay" id="intro" hidden>
   <div class="sheet" role="dialog" aria-labelledby="introTitle">
-    <span class="label">U.S. Department of the Treasury · Office of Debt Management</span>
-    <h2 id="introTitle">Keep America borrowing</h2>
-    <p class="lead">Every two years Congress tells you how much money it needs: this term's deficit, plus any old debt that has come due. You can't change the amount. You choose <b>how</b> to borrow it.</p>
+    <span class="label">U.S. Treasury · Office of Debt Management</span>
+    <h2 id="introTitle">You borrow for America</h2>
+    <p class="lead">Every two years, Congress needs trillions of dollars and you have to raise it. Your one decision each turn: how to split it between</p>
     <div class="defs">
-      <div class="def b">
-        <h3>Bills · short-term</h3>
-        <p>Treasury bills mature in a year or less, so they pay about what the Fed charges. Cheap when the Fed is low. But every bill comes due each turn and must be re-borrowed at whatever rates are then.</p>
-      </div>
-      <div class="def l">
-        <h3>Bonds · long-term</h3>
-        <p>10-year notes, standing in for everything from 2 to 30 years. You lock in today's rate for five turns. But the market sets that rate, and it rises when you sell more than buyers want.</p>
-      </div>
+      <div class="def b"><h3>Short-term bills</h3><p>Cheap now, but come due every turn.</p></div>
+      <div class="def l"><h3>Long-term bonds</h3><p>Lock in today's rate for ten years.</p></div>
     </div>
-    <ul class="rules">
-      <li>The Fed sets short rates by rule: it hikes when inflation runs hot and cuts when jobs are lost.</li>
-      <li>The 10-year yield is what markets expect the Fed to do for a decade, plus a <b>term premium</b> for the risk of lending long.</li>
-      <li>You lose if interest eats more than <b>35% of federal revenue</b> (it's about 18% today) or if <b>two auctions fail</b>.</li>
-      <li>10 turns, one per Congress, 2027 to 2047. About five minutes.</li>
-    </ul>
+    <p>Then watch how the Fed, world events, and bond buyers respond. Keep interest from swallowing the budget for 20 years. About five minutes.</p>
     <div class="seedrow">
       <button class="primary" id="startBtn" type="button">Take office</button>
       <label for="seedInput">World #</label>
       <input id="seedInput" inputmode="numeric" autocomplete="off">
-      <span>Same number, same history. Try it again with a different strategy.</span>
     </div>
   </div>
+</div>
+
+<div class="overlay" id="news" hidden>
+  <div class="sheet news" role="dialog" aria-labelledby="newsTitle" id="newsSheet"></div>
 </div>
 
 <div class="overlay" id="end" hidden>

@@ -4,20 +4,12 @@
 (function () {
   const R = window.Rollover;
   const $ = (sel) => document.querySelector(sel);
-  const CLOCK_SECONDS = 30;
   const reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   const fmtT = (x) => '$' + x.toFixed(1) + 'T';
   const pct = (x, d = 1) => x.toFixed(d) + '%';
   const arrow = (d, eps = 0.01) => (d > eps ? '▲' : d < -eps ? '▼' : '■');
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-
-  function load(k, def) {
-    try { const v = localStorage.getItem('rollover.' + k); return v == null ? def : JSON.parse(v); } catch (e) { return def; }
-  }
-  function save(k, v) {
-    try { localStorage.setItem('rollover.' + k, JSON.stringify(v)); } catch (e) { /* storage unavailable */ }
-  }
 
   let world = null;
   let st = null;
@@ -26,9 +18,6 @@
   let decisions = [];
   let phase = 'intro';     // intro | decide | result | end
   let share = 0.35;
-  let clockOn = load('clock', true);
-  let clockLeft = CLOCK_SECONDS;
-  let clockTimer = null;
 
   // ---- game flow -------------------------------------------------------
   function startGame(seed, replay) {
@@ -44,19 +33,19 @@
       share = d;
     }
     $('#seedLabel').textContent = 'World #' + world.seed;
-    hide('#intro'); hide('#end');
+    hide('#intro'); hide('#end'); hide('#news');
   }
 
   function nextTurn() {
     brief = R.beginTurn(st, world);
     phase = 'decide';
     render();
-    startClock();
+    window.scrollTo({ top: 0 });
+    openNews();
   }
 
   function issue() {
     if (phase !== 'decide') return;
-    stopClock();
     lastEntry = R.resolveTurn(st, share);
     decisions.push(share);
     phase = 'result';
@@ -70,28 +59,54 @@
     else nextTurn();
   }
 
-  function startClock() {
-    stopClock();
-    clockLeft = CLOCK_SECONDS;
-    updateClock();
-    if (!clockOn) return;
-    clockTimer = setInterval(() => {
-      clockLeft -= 0.25;
-      updateClock();
-      if (clockLeft <= 0) issue();
-    }, 250);
+  // ---- news briefing -----------------------------------------------------
+  // Each turn opens with the events full-size; dismissing shrinks the sheet
+  // into the briefing panel so the player sees where it lives.
+  function eventHTML(e, big) {
+    return '<article class="event' + (big ? ' big' : '') + '">' +
+      '<span class="cat">' + esc(e.cat) + '</span>' +
+      (big ? '<h2>' : '<h3>') + esc(e.title) + (big ? '</h2>' : '</h3>') +
+      '<p class="text">' + esc(e.text) + '</p>' +
+      '<p class="lesson"><b>Why it matters:</b> ' + esc(e.lesson) + '</p>' +
+      '</article>';
   }
-  function stopClock() {
-    if (clockTimer) clearInterval(clockTimer);
-    clockTimer = null;
+
+  function openNews() {
+    const b = brief;
+    $('#newsSheet').innerHTML =
+      '<span class="label">' + b.congress + 'th Congress · ' + b.years[0] + '–' + b.years[1] + ' · Turn ' + (b.turn + 1) + ' of ' + R.TURNS + '</span>' +
+      '<div class="events" id="newsTitle">' + b.events.map((e) => eventHTML(e, true)).join('') + '</div>' +
+      '<p class="fednote"><span class="label">Meanwhile</span> ' + esc(b.fed.reason) + '</p>' +
+      '<div class="actions"><button class="primary" id="newsBtn" type="button">To the desk →</button></div>';
+    show('#news');
+    const sheet = $('#newsSheet');
+    if (!reduceMotion && sheet.animate) {
+      sheet.animate([{ opacity: 0, transform: 'translateY(16px) scale(0.98)' }, { opacity: 1, transform: 'none' }],
+        { duration: 260, easing: 'cubic-bezier(.2,.7,.2,1)' });
+    }
+    $('#newsBtn').addEventListener('click', closeNews);
+    $('#newsBtn').focus({ preventScroll: true });
   }
-  function updateClock() {
-    const bar = $('#clockBar');
-    const t = $('#clockText');
-    if (!bar || !t) return;
-    if (!clockOn) { bar.style.width = '100%'; t.textContent = 'Clock off: take your time'; return; }
-    bar.style.width = Math.max(0, clockLeft / CLOCK_SECONDS * 100) + '%';
-    t.textContent = Math.ceil(clockLeft) + 's left, then your current mix is issued';
+
+  function closeNews() {
+    const overlay = $('#news');
+    if (overlay.hidden) return;
+    const sheet = $('#newsSheet');
+    const target = $('#brief');
+    const done = () => hide('#news');
+    if (reduceMotion || !sheet.animate) { done(); return; }
+    const from = sheet.getBoundingClientRect();
+    const to = target.getBoundingClientRect();
+    const dx = (to.left + to.width / 2) - (from.left + from.width / 2);
+    const dy = (to.top + to.height / 2) - (from.top + from.height / 2);
+    const s = Math.min(to.width / from.width, to.height / from.height);
+    overlay.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 320, easing: 'ease-in', fill: 'forwards' });
+    sheet.animate([{ transform: 'none' }, { transform: 'translate(' + dx + 'px,' + dy + 'px) scale(' + s + ')' }],
+      { duration: 320, easing: 'cubic-bezier(.5,0,.2,1)', fill: 'forwards' }).onfinish = () => {
+      sheet.getAnimations().forEach((a) => a.cancel());
+      overlay.getAnimations().forEach((a) => a.cancel());
+      done();
+    };
   }
 
   // ---- render ------------------------------------------------------------
@@ -121,16 +136,12 @@
   function renderBrief() {
     const b = brief;
     if (!b) { $('#brief').innerHTML = ''; return; }
-    const evs = b.events.map((e) =>
-      '<article class="event">' +
-      '<span class="cat">' + esc(e.cat) + '</span>' +
-      '<h3>' + esc(e.title) + '</h3>' +
-      '<p>' + esc(e.text) + '</p>' +
-      '<p class="lesson"><b>Why it matters:</b> ' + esc(e.lesson) + '</p>' +
-      '</article>').join('');
     $('#brief').innerHTML =
       '<div class="congress"><h2>' + b.congress + 'th Congress</h2><span class="label">' + b.years[0] + '–' + b.years[1] + ' · Turn ' + (b.turn + 1) + ' of ' + R.TURNS + '</span></div>' +
-      '<div class="events">' + evs + '</div>';
+      '<div class="events">' + b.events.map((e) => eventHTML(e, false)).join('') + '</div>' +
+      (phase === 'decide' ? '<button class="chipbtn reopen" id="reopenBtn" type="button">Read the briefing again</button>' : '');
+    const re = $('#reopenBtn');
+    if (re) re.addEventListener('click', openNews);
   }
 
   function renderEcon() {
@@ -210,12 +221,10 @@
       '</div>' +
       '<input type="range" id="mix" min="0" max="100" step="5" value="' + longPct + '" aria-label="Share of borrowing in 10-year bonds">' +
       '<div class="gauges" id="gauges">' + gauges(pv) + '</div>' +
-      '<div class="actions"><button class="primary" id="issueBtn" type="button">Hold the auctions</button>' +
-      '<div class="clock"><div class="bar"><span id="clockBar"></span></div><span class="t" id="clockText"></span></div></div>' +
+      '<div class="actions"><button class="primary" id="issueBtn" type="button">Hold the auctions</button></div>' +
       '<p class="hint">The black tick is roughly how much each group of buyers wants this turn. Selling beyond it pushes yields up. Bills always come due next turn; bonds lock in for five turns.</p>';
     $('#mix').addEventListener('input', onSlide);
     $('#issueBtn').addEventListener('click', issue);
-    updateClock();
   }
 
   function gauges(pv) {
@@ -357,7 +366,6 @@
   }
 
   function showEnd() {
-    stopClock();
     const you = st;
     const rows = [{ name: 'You', s: you, you: true }].concat(
       R.STRATEGIES.map((g) => ({ name: g.name, s: R.simulate(world, () => g.share) })));
@@ -417,39 +425,25 @@
   function show(sel) { $(sel).hidden = false; }
   function hide(sel) { $(sel).hidden = true; }
 
-  function setClockBtn() {
-    const b = $('#clockBtn');
-    b.textContent = 'Clock: ' + (clockOn ? 'on' : 'off');
-    b.setAttribute('aria-pressed', String(clockOn));
-  }
-
   function showIntro() {
     phase = 'intro';
-    stopClock();
-    const qs = new URLSearchParams(location.search).get('seed');
-    $('#seedInput').value = qs && /^\d+$/.test(qs) ? qs : (world ? world.seed : R.randomSeed());
+    $('#seedInput').value = world.seed;
     show('#intro');
     $('#startBtn').focus({ preventScroll: true });
   }
 
   function boot(data) {
-    $('#clockBtn').addEventListener('click', () => {
-      clockOn = !clockOn; save('clock', clockOn); setClockBtn();
-      if (phase === 'decide') { if (clockOn) startClock(); else { stopClock(); updateClock(); } }
-    });
-    $('#helpBtn').addEventListener('click', () => { if (phase === 'decide') stopClock(); show('#intro'); $('#startBtn').textContent = world ? 'Back to the desk' : 'Take office'; });
+    $('#helpBtn').addEventListener('click', () => { show('#intro'); $('#startBtn').textContent = world ? 'Back to the desk' : 'Take office'; });
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !$('#news').hidden) closeNews(); });
     $('#startBtn').addEventListener('click', () => {
       const want = parseInt($('#seedInput').value, 10);
       if (world && phase !== 'intro' && (!want || want === world.seed)) {
         hide('#intro');
-        if (phase === 'decide') startClock();
         return;
       }
       startGame(want > 0 ? want : R.randomSeed());
       nextTurn();
     });
-    setClockBtn();
-
     // Preview a realistic desk behind the intro sheet.
     if (data && data.seed && data.phase && data.phase !== 'intro') {
       startGame(data.seed, data.phase === 'decide' ? data.decisions : data.decisions.slice(0, -1));
@@ -464,7 +458,8 @@
       }
       return;
     }
-    startGame(R.randomSeed());
+    const qs = new URLSearchParams(location.search).get('seed');
+    startGame(qs && /^\d+$/.test(qs) ? +qs : R.randomSeed());
     brief = R.beginTurn(st, world);
     phase = 'decide';
     render();
