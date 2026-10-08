@@ -1,0 +1,8 @@
+{
+  "name": "rollover",
+  "private": true,
+  "description": "A five-minute learning game about U.S. Treasury borrowing and the bond market.",
+  "scripts": {
+    "test": "node --test"
+  }
+}
