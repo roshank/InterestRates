@@ -7,7 +7,7 @@
 <meta name="description" content="A five-minute learning game: run U.S. Treasury borrowing and see how the Fed, Congress, and bond buyers move the 10-year yield.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@112..125,600..900&family=IBM+Plex+Mono:wght@400;500&family=Public+Sans:ital,wght@0,400;0,600;0,700;1,400&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@112..125,600..900&family=IBM+Plex+Mono:wght@400;500&family=Newsreader:opsz,wght@6..72,500..800&family=Public+Sans:ital,wght@0,400;0,600;0,700;1,400&display=swap">
 <style>
 /* Layout: a Treasury desk. Briefing and decision on the left, market instruments on the right; one column on phones. */
 :root {
@@ -26,6 +26,7 @@
   --overlay: rgba(23, 33, 42, 0.55);
   --display: "Archivo", "Arial Narrow", "Helvetica Neue", Arial, sans-serif;
   --body: "Public Sans", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --news: "Newsreader", Georgia, "Times New Roman", serif;
   --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
   color-scheme: light;
 }
@@ -119,7 +120,39 @@ header.top {
 }
 .event.big .text { font-size: 18px; max-width: 54ch; }
 .event.big .lesson { font-size: 15px; }
-.news { border-top-color: var(--bond); }
+.news { border-top-color: var(--ink); max-width: 920px; }
+/* The paper */
+.masthead { text-align: center; border-bottom: 3px double var(--ink); padding-bottom: 8px; }
+.mast-line {
+  display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; font: 600 11px var(--body);
+  text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); border-bottom: 1px solid var(--rule); padding-bottom: 6px; margin-bottom: 6px;
+}
+.masthead h2 { font-family: var(--news); font-weight: 800; font-size: clamp(32px, 6vw, 52px); font-stretch: normal; letter-spacing: -0.01em; }
+.glance .label { display: block; margin-bottom: 8px; }
+.tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+@media (max-width: 560px) { .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.tile { border-radius: 4px; padding: 8px 10px; background: color-mix(in srgb, var(--tone, var(--muted)) 11%, var(--card)); display: grid; gap: 2px; min-width: 0; }
+.tile.t-good { --tone: var(--good); } .tile.t-bad { --tone: var(--warn); } .tile.t-neutral { --tone: var(--muted); }
+.tile .tv { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
+.tile .tv .num { font-size: 17px; font-weight: 500; }
+.tile .tv .td { font-size: 12px; color: var(--tone); }
+.tile .te { font-size: 12.5px; font-weight: 600; color: var(--tone); }
+.tile.t-neutral .te, .tile.t-neutral .tv .td { color: var(--muted); }
+#brief .tiles { margin-bottom: 12px; }
+.stories { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 0 24px; }
+.story { border-top: 1px solid var(--rule); padding-block: 14px; display: grid; gap: 6px; align-content: start; min-width: 0; }
+.story.lead { grid-column: 1 / -1; border-top: 0; }
+.story .kicker, .headlines .kicker { font: 700 10.5px var(--body); letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+.story h3 { font-family: var(--news); font-weight: 700; font-size: 22px; line-height: 1.15; font-stretch: normal; }
+.story.lead h3 { font-size: clamp(28px, 4.5vw, 40px); font-weight: 800; }
+.story .dek { font-size: 14.5px; max-width: 60ch; }
+.story.lead .dek { font-size: 17px; }
+.story details summary { cursor: pointer; font-size: 13px; font-weight: 600; color: var(--muted); width: max-content; }
+.story details summary:hover { color: var(--ink); }
+.story .more { display: grid; gap: 8px; font-size: 14px; padding-top: 8px; max-width: 64ch; }
+.story .more .stats { margin-top: 2px; }
+.headlines { list-style: none; padding: 0; margin: 0; display: grid; gap: 6px; font-family: var(--news); font-weight: 700; font-size: 17px; line-height: 1.25; }
+.headlines .kicker { margin-right: 6px; }
 .news .events { gap: 22px; }
 .news .event { padding-top: 22px; }
 .news .event:first-child { padding-top: 0; }
@@ -163,7 +196,10 @@ input[type=range] { width: 100%; accent-color: var(--ink); height: 28px; margin:
 .gauge .head { display: flex; justify-content: space-between; gap: 8px; font-size: 12.5px; margin-bottom: 4px; flex-wrap: wrap; }
 .gauge .bar { position: relative; height: 12px; background: var(--track); border-radius: 2px; }
 .gauge .fill { position: absolute; inset: 0 auto 0 0; border-radius: 2px; transition: width 0.15s; }
-.gauge .cap { position: absolute; top: -4px; bottom: -4px; width: 2px; background: var(--ink); transition: left 0.15s; }
+.gauge .band {
+  position: absolute; top: -4px; bottom: -4px; border-left: 2px solid var(--ink); border-right: 2px solid var(--ink);
+  background: color-mix(in srgb, var(--ink) 14%, transparent); transition: left 0.15s, width 0.15s;
+}
 .tone-good { color: var(--good); } .tone-warn { color: var(--warn); } .tone-bad { color: var(--bad); } .tone-neutral { color: var(--muted); }
 .actions { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
 .primary {

@@ -21,6 +21,8 @@
   const CRISIS_INT_REV = 35;   // lose if interest exceeds this % of revenue
   const MAX_STRIKES = 2;       // lose after this many failed auctions
   const START_GDP = 30;
+  const DEMAND_SPREAD = 0.12;  // public estimates of demand are +/- this much
+  const DEMAND_NOISE = 0.06;   // how far true demand strays from the estimate
 
   // Baseline appetite of each buyer group, % of GDP. Short appetite is how
   // many bills they're willing to hold; long appetite is how many new
@@ -114,6 +116,10 @@
         noise: { gap: gauss(rng), inf: gauss(rng), fed: gauss(rng) },
       });
     }
+    // True auction demand differs from the public estimate. Drawn from its
+    // own stream so it doesn't reshuffle the events for a given seed.
+    const drng = mulberry32((seed * 2654435761) >>> 0 || 7);
+    for (const T of turns) { T.noise.demS = gauss(drng); T.noise.demL = gauss(drng); }
     return { seed, start, turns };
   }
 
@@ -320,7 +326,13 @@
     const rollShort = st.shortStock;
     const need = Math.max(0.5, primary + interest + rollShort + rollLong);
 
+    // Treasury sees an estimate (from dealer surveys, holdings data, past
+    // auctions). The true amount is only revealed when the auction clears.
     const demand = buyerDemand(st, gdpEnd, st.fedRate, bs);
+    demand.rangeS = [demand.capS * (1 - DEMAND_SPREAD), demand.capS * (1 + DEMAND_SPREAD)];
+    demand.rangeL = [demand.capL * (1 - DEMAND_SPREAD), demand.capL * (1 + DEMAND_SPREAD)];
+    demand.actualS = demand.capS * (1 + clamp(DEMAND_NOISE * (T.noise.demS || 0), -0.15, 0.15));
+    demand.actualL = demand.capL * (1 + clamp(DEMAND_NOISE * (T.noise.demL || 0), -0.15, 0.15));
 
     st.brief = {
       turn: t,
@@ -377,8 +389,9 @@
     const b = st.brief;
     longShare = clamp(longShare, 0, 1);
     const prevY10 = st.y10, prevY1 = st.y1, prevTp = st.tp, prevExp = st.expPath, prevIntRev = st.intRev;
-    const pv = previewAuction(st, longShare);
-    const { L, S, pressureL, pressureS } = pv;
+    const { L, S } = previewAuction(st, longShare);
+    const pressureL = (L - b.demand.actualL) / b.demand.actualL;
+    const pressureS = (S - b.demand.actualS) / b.demand.actualS;
 
     const failed = pressureL > 1.0;
     if (failed) { st.strikes += 1; }
@@ -411,7 +424,8 @@
     const auction = {
       L, S, pressureL, pressureS,
       longStatus: auctionStatus(pressureL), shortStatus: auctionStatus(pressureS, true),
-      capL: b.demand.capL, capS: b.demand.capS,
+      capL: b.demand.actualL, capS: b.demand.actualS,
+      estL: b.demand.rangeL, estS: b.demand.rangeS,
       tailBp: pressureL > 0.1 ? Math.round(1.3 * pressureL * 100) : 0,
       failed,
     };
@@ -445,6 +459,10 @@
     const lines = [];
     const fmt = (x) => '$' + x.toFixed(1) + 'T';
     // Auction
+    const range = (r) => '$' + r[0].toFixed(1) + '–' + r[1].toFixed(1) + 'T';
+    const est = auction.estL;
+    const surprise = auction.capL > est[1] ? ', more than expected' : auction.capL < est[0] ? ', less than expected' : '';
+    lines.push({ tone: 'neutral', text: 'Bond buyers turned out to want ' + fmt(auction.capL) + ' (estimate ' + range(est) + surprise + ').' });
     if (auction.failed) {
       lines.push({ tone: 'bad', text: 'Failed auction. You offered ' + fmt(auction.L) + ' of 10-year bonds but buyers only wanted about ' + fmt(auction.capL) + '. Dealers were stuck with the rest, yields spiked, and markets will remember. (' + st.strikes + ' of ' + MAX_STRIKES + ' strikes)' });
     } else if (auction.pressureL > 0.1) {
