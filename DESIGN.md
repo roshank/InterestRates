@@ -25,12 +25,15 @@ After two or three runs, a player should be able to explain:
 
 One turn is one Congress (two years). Ten turns run from 2027 to 2047.
 
-1. **Briefing.** Each turn opens with a full-size briefing: one or two event
-   cards (Congress, economy, world, markets), each with a one-line "why it
-   matters," the state of the country (growth, inflation, jobs, the Fed's move
-   and why), and a summary of which bond buyers are leaning in or pulling
-   back. Dismissing it shrinks the
-   briefing into its panel on the desk, where it can be reopened.
+1. **The morning paper.** Each turn opens as a newspaper, *The Treasury
+   Ledger*. At the top, six color-coded tiles say what changed and what it
+   means for you (borrowing need, Fed rate, inflation, growth, bond buyers,
+   bill buyers), each with its direction and its effect, e.g. "bills cost
+   more". Below, each event is a headline story, plus generated stories for
+   the Fed, the economy, and the bond market. Headlines and a one-line
+   summary are always visible; "why it matters" and a real-world parallel
+   sit behind "Read more". Dismissing the paper shrinks it into the
+   briefing panel on the desk.
 2. **The bill.** "Congress needs you to raise $X": this term's deficit
    spending, interest due, maturing bills, and maturing bonds.
 3. **One decision.** A slider splits the borrowing between:
@@ -39,9 +42,12 @@ One turn is one Congress (two years). Ten turns run from 2027 to 2047.
    - **Bonds (long):** stand-ins for notes and bonds (2 to 30 years),
      modeled as 10-year notes that lock in their rate for five turns.
 
-   Live gauges compare what you're selling against roughly how much buyers
-   want, with a forecast ("strong demand", "likely to tail", "auction will
-   fail"). There is no timer; players can study the desk as long as they like.
+   Live gauges compare what you're selling against an *estimate* of buyer
+   demand, shown as a range (Treasury sees holdings data, dealer surveys,
+   and past auctions, but not the exact number). The true demand, within
+   about 15% of the estimate, is revealed at the auction. A forecast reads
+   "strong demand expected", "likely to tail", or "likely to fail". There
+   is no timer; players can study the desk as long as they like.
 4. **Auction results.** Clearing yields for bills and bonds, tails or
    failures, and a short debrief that splits the 10-year's move into its
    expected-Fed-path part and its term-premium part, naming the biggest

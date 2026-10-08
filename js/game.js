@@ -18,7 +18,7 @@
   let decisions = [];
   let phase = 'intro';     // intro | decide | result | end
   let share = 0.35;
-  let prevDemand = null;  // last turn's buyer appetite, for comparisons
+  let prevBrief = null;    // last turn's briefing, for comparisons
 
   // ---- game flow -------------------------------------------------------
   function startGame(seed, replay) {
@@ -38,7 +38,7 @@
   }
 
   function nextTurn() {
-    prevDemand = brief && st.turn > 0 ? brief.demand : null;
+    prevBrief = brief && st.turn > 0 ? brief : null;
     brief = R.beginTurn(st, world);
     phase = 'decide';
     render();
@@ -61,29 +61,128 @@
     else nextTurn();
   }
 
-  // ---- news briefing -----------------------------------------------------
-  // Each turn opens with the events full-size; dismissing shrinks the sheet
-  // into the briefing panel so the player sees where it lives.
-  function eventHTML(e, big) {
-    return '<article class="event' + (big ? ' big' : '') + '">' +
-      '<span class="cat">' + esc(e.cat) + '</span>' +
-      (big ? '<h2>' : '<h3>') + esc(e.title) + (big ? '</h2>' : '</h3>') +
-      '<p class="text">' + esc(e.text) + '</p>' +
-      '<p class="lesson"><b>Why it matters:</b> ' + esc(e.lesson) + '</p>' +
-      (big && e.example ? '<p class="example"><span class="label">Real world</span> ' + esc(e.example) + '</p>' : '') +
-      '</article>';
+  // ---- the morning paper -------------------------------------------------
+  // Each turn opens with a newspaper: a color-coded summary of what changed
+  // and what it means for the Treasury, then headlines with optional detail.
+  // Dismissing it shrinks the paper into the briefing panel on the desk.
+  const range = (r) => '$' + r[0].toFixed(1) + '–' + r[1].toFixed(1) + 'T';
+  const signed = (d, digits = 1) => (d >= 0 ? '+' : '−') + Math.abs(d).toFixed(digits);
+  const delta = (d, eps, digits = 1, unit = '') =>
+    Math.abs(d) < eps ? '■ no change' : arrow(d) + ' ' + signed(d, digits) + unit;
+
+  // Six tiles: value, direction, and what it means for you. Tone is from the
+  // Treasury's point of view (good = cheaper or easier borrowing).
+  function summaryTiles(b) {
+    const prev = b.turn === 0 ? st.initial : st.history[b.turn - 1];
+    const tiles = [];
+    const flat = (d, eps) => Math.abs(d) < eps;
+
+    const dn = prevBrief ? b.need.total - prevBrief.need.total : null;
+    tiles.push({
+      label: 'To borrow', value: fmtT(b.need.total),
+      delta: dn === null ? '' : delta(dn, 0.05, 1, 'T'),
+      tone: dn === null ? 'neutral' : dn > 0.2 ? 'bad' : dn < -0.2 ? 'good' : 'neutral',
+      effect: dn === null ? 'deficit plus debt coming due' : dn > 0.2 ? 'more to raise than last time' : dn < -0.2 ? 'less to raise than last time' : 'about the same as last time',
+    });
+
+    const df = b.fed.rate - b.fed.prev;
+    tiles.push({
+      label: 'Fed rate', value: pct(b.fed.rate, 2), delta: delta(df, 0.01, 2),
+      tone: flat(df, 0.01) ? 'neutral' : df > 0 ? 'bad' : 'good',
+      effect: flat(df, 0.01) ? 'bill costs steady' : df > 0 ? 'bills cost more' : 'bills get cheaper',
+    });
+
+    const di = b.econ.inf - prev.inf;
+    tiles.push({
+      label: 'Inflation', value: pct(b.econ.inf), delta: delta(di, 0.05),
+      tone: b.econ.inf > 3.5 || di > 0.4 ? 'bad' : di < -0.4 && b.econ.inf > 1 ? 'good' : 'neutral',
+      effect: b.econ.inf > 3.5 ? 'Fed will stay tight' : di > 0.4 ? 'Fed may hike' : di < -0.4 ? 'room for the Fed to ease' : 'close to the 2% target',
+    });
+
+    const dg = b.econ.growth - prev.growth;
+    tiles.push({
+      label: 'Growth', value: pct(b.econ.growth), delta: delta(dg, 0.05),
+      tone: b.econ.growth < 1 ? 'bad' : b.econ.growth > 2.2 ? 'good' : 'neutral',
+      effect: b.econ.growth < 1 ? 'tax revenue falls, deficit grows' : b.econ.growth > 2.2 ? 'tax revenue rises' : 'revenue on trend',
+    });
+
+    const buyerTile = (label, now, before, rng, kind) => {
+      const d = before ? (now - before) / before : null;
+      return {
+        label, value: range(rng), delta: d === null ? 'estimate' : delta(d * 100, 0.5, 0, '%'),
+        tone: d === null ? 'neutral' : d > 0.03 ? 'good' : d < -0.03 ? 'bad' : 'neutral',
+        effect: d === null ? 'what dealers expect' : d > 0.03 ? 'easier to sell ' + kind : d < -0.03 ? 'harder to sell ' + kind : 'demand steady',
+      };
+    };
+    tiles.push(buyerTile('Bond buyers', b.demand.capL, prevBrief && prevBrief.demand.capL, b.demand.rangeL, 'bonds'));
+    tiles.push(buyerTile('Bill buyers', b.demand.capS, prevBrief && prevBrief.demand.capS, b.demand.rangeS, 'bills'));
+
+    return '<div class="tiles">' + tiles.map((t) =>
+      '<div class="tile t-' + t.tone + '"><span class="label">' + t.label + '</span>' +
+      '<div class="tv"><span class="num">' + t.value + '</span> <span class="td num">' + esc(t.delta) + '</span></div>' +
+      '<div class="te">' + esc(t.effect) + '</div></div>').join('') + '</div>';
+  }
+
+  function stories(b) {
+    const out = b.events.map((e) => ({
+      kicker: e.cat, head: e.title, dek: e.text,
+      body: '<p><b>Why it matters:</b> ' + esc(e.lesson) + '</p>' +
+        (e.example ? '<p class="example"><span class="label">Real world</span> ' + esc(e.example) + '</p>' : ''),
+    }));
+
+    const df = b.fed.rate - b.fed.prev;
+    out.push({
+      kicker: 'The Fed',
+      head: Math.abs(df) < 0.01 ? 'Fed holds rates at ' + pct(b.fed.rate, 2) : (df > 0 ? 'Fed raises rates to ' : 'Fed cuts rates to ') + pct(b.fed.rate, 2),
+      dek: b.fed.reason,
+      body: '<p>' + (b.fed.bs === 'QE' ? 'The Fed is also buying bonds (QE), adding demand for your debt.' : b.fed.bs === 'QT' ? 'The Fed is also letting its bonds run off (QT), so private buyers must absorb more.' : 'The Fed\'s bond holdings are steady.') + '</p>' +
+        '<p><b>Why it matters:</b> Bills pay roughly the Fed\'s rate, so every move reprices your short-term debt right away. Long rates follow where markets expect the Fed to go.</p>',
+    });
+
+    const e = b.econ;
+    const head = e.growth < 0 ? 'Economy shrinks; unemployment hits ' + pct(e.unemp)
+      : e.inf > 4 ? 'Inflation runs hot at ' + pct(e.inf)
+      : e.growth < 1 ? 'Economy stalls at ' + pct(e.growth) + ' growth'
+      : e.growth > 2.6 ? 'Economy booms with ' + pct(e.growth) + ' growth'
+      : 'Steady economy: ' + pct(e.growth) + ' growth, ' + pct(e.inf) + ' inflation';
+    out.push({
+      kicker: 'Economy', head,
+      dek: 'Unemployment ' + pct(e.unemp) + ', inflation ' + pct(e.inf) + '.' +
+        (e.drivers.length ? ' Biggest forces: ' + e.drivers.map((d) => d.label).join('; ') + '.' : ''),
+      body: econHTML(b),
+    });
+
+    const movers = b.demand.rows.filter((r) => r.notes.length);
+    const back = movers.find((r) => r.notes.some((n) => /pulling back|losses/.test(n)));
+    const more = movers.find((r) => r.notes.some((n) => /buying more|QE/.test(n)));
+    out.push({
+      kicker: 'Bond market',
+      head: back ? back.name + ' pull back from Treasuries' : more ? more.name + ' step up buying' : 'Bond demand seen at ' + range(b.demand.rangeL),
+      dek: 'Dealers estimate buyers will take ' + range(b.demand.rangeL) + ' of new bonds and hold ' + range(b.demand.rangeS) + ' of bills. The real number shows up at the auction.',
+      body: buyersSummaryHTML(b),
+    });
+    return out;
   }
 
   function openNews() {
     const b = brief;
+    const st0 = stories(b);
     $('#newsSheet').innerHTML =
-      '<span class="label">' + b.congress + 'th Congress · ' + b.years[0] + '–' + b.years[1] + ' · Turn ' + (b.turn + 1) + ' of ' + R.TURNS + '</span>' +
-      '<div class="events" id="newsTitle">' + b.events.map((e) => eventHTML(e, true)).join('') + '</div>' +
-      '<section class="country"><span class="label">State of the country</span>' + econHTML(b) + '</section>' +
-      '<section class="country"><span class="label">Bond buyers</span>' + buyersSummaryHTML(b) + '</section>' +
+      '<header class="masthead">' +
+      '<div class="mast-line"><span>Vol. ' + (b.turn + 1) + ' of ' + R.TURNS + '</span><span>' + b.congress + 'th Congress</span><span>' + b.years[0] + '–' + b.years[1] + '</span></div>' +
+      '<h2 id="newsTitle">The Treasury Ledger</h2></header>' +
+      '<section class="glance"><span class="label">What this means for you</span>' + summaryTiles(b) + '</section>' +
+      '<div class="stories">' + st0.map((x, i) =>
+        '<article class="story' + (i === 0 ? ' lead' : '') + '">' +
+        '<span class="kicker">' + esc(x.kicker) + '</span>' +
+        '<h3>' + esc(x.head) + '</h3>' +
+        '<p class="dek">' + esc(x.dek) + '</p>' +
+        '<details><summary>Read more</summary><div class="more">' + x.body + '</div></details>' +
+        '</article>').join('') + '</div>' +
       '<div class="actions"><button class="primary" id="newsBtn" type="button">To the desk →</button></div>';
     show('#news');
     const sheet = $('#newsSheet');
+    sheet.scrollTop = 0;
     if (!reduceMotion && sheet.animate) {
       sheet.animate([{ opacity: 0, transform: 'translateY(16px) scale(0.98)' }, { opacity: 1, transform: 'none' }],
         { duration: 260, easing: 'cubic-bezier(.2,.7,.2,1)' });
@@ -141,9 +240,9 @@
     if (!b) { $('#brief').innerHTML = ''; return; }
     $('#brief').innerHTML =
       '<div class="congress"><h2>' + b.congress + 'th Congress</h2><span class="label">' + b.years[0] + '–' + b.years[1] + ' · Turn ' + (b.turn + 1) + ' of ' + R.TURNS + '</span></div>' +
-      '<div class="events">' + b.events.map((e) => eventHTML(e, false)).join('') + '</div>' +
-      '<div class="country">' + econHTML(b) + '</div>' +
-      (phase === 'decide' ? '<button class="chipbtn reopen" id="reopenBtn" type="button">Read the briefing again</button>' : '');
+      summaryTiles(b) +
+      '<ul class="headlines">' + stories(b).map((x) => '<li><span class="kicker">' + esc(x.kicker) + '</span> ' + esc(x.head) + '</li>').join('') + '</ul>' +
+      (phase === 'decide' ? '<button class="chipbtn reopen" id="reopenBtn" type="button">Open the paper</button>' : '');
     const re = $('#reopenBtn');
     if (re) re.addEventListener('click', openNews);
   }
@@ -172,14 +271,8 @@
   function buyersSummaryHTML(b) {
     const moves = b.demand.rows.filter((r) => r.notes.length)
       .map((r) => '<li><b>' + esc(r.name) + '</b> ' + esc(r.notes.join(', ')) + '</li>');
-    const change = (now, before) => {
-      if (!before) return '';
-      const d = now - before;
-      return Math.abs(d) < 0.15 ? ' (about the same)' : ' (' + (d > 0 ? 'up ' : 'down ') + fmtT(Math.abs(d)) + ')';
-    };
-    return (moves.length ? '<ul class="buyerlist">' + moves.join('') + '</ul>' : '<p class="muted">No big shifts among buyers this turn.</p>') +
-      '<p class="muted">Appetite this turn: about <span class="num bills">' + fmtT(b.demand.capS) + '</span> of bills' + change(b.demand.capS, prevDemand && prevDemand.capS) +
-      ' and <span class="num bonds">' + fmtT(b.demand.capL) + '</span> of new bonds' + change(b.demand.capL, prevDemand && prevDemand.capL) + '.</p>';
+    return (moves.length ? '<ul class="buyerlist">' + moves.join('') + '</ul>' : '<p>No big shifts among buyers this turn.</p>') +
+      '<p><b>Why it matters:</b> Treasury sees holdings data, dealer surveys and past auctions, so it knows the trend but not the exact number. Sell well inside the estimate to be safe; sell beyond it and yields jump.</p>';
   }
 
   function renderNeed() {
@@ -203,21 +296,23 @@
   }
 
   const STATUS = {
-    strong: { t: 'Strong demand', c: 'tone-good' },
+    strong: { t: 'Strong demand expected', c: 'tone-good' },
     ok: { t: 'Should clear smoothly', c: 'tone-neutral' },
     tail: { t: 'Likely to tail', c: 'tone-warn' },
-    weak: { t: 'Weak: yields will jump', c: 'tone-bad' },
-    fail: { t: 'Auction will fail', c: 'tone-bad' },
+    weak: { t: 'Weak: yields likely to jump', c: 'tone-bad' },
+    fail: { t: 'Likely to fail', c: 'tone-bad' },
   };
 
-  function gauge(id, label, cls, amount, cap, status, color) {
-    const max = Math.max(amount, cap) * 1.15 || 1;
+  // The shaded band is the demand estimate; the true amount lands somewhere
+  // around it and is revealed at the auction.
+  function gauge(id, label, cls, amount, rng, status, color) {
+    const max = Math.max(amount, rng[1]) * 1.12 || 1;
     const s = STATUS[status];
     return '<div class="gauge" id="' + id + '">' +
-      '<div class="head"><span class="' + cls + '"><b>' + label + '</b> <span class="num">' + fmtT(amount) + '</span> vs buyers ~<span class="num">' + fmtT(cap) + '</span></span>' +
+      '<div class="head"><span class="' + cls + '"><b>' + label + '</b> <span class="num">' + fmtT(amount) + '</span> vs buyers ~<span class="num">' + range(rng) + '</span></span>' +
       '<span class="' + s.c + '">' + s.t + '</span></div>' +
       '<div class="bar"><div class="fill" style="width:' + (amount / max * 100) + '%;background:' + color + '"></div>' +
-      '<div class="cap" style="left:' + (cap / max * 100) + '%"></div></div></div>';
+      '<div class="band" style="left:' + (rng[0] / max * 100) + '%;width:' + ((rng[1] - rng[0]) / max * 100) + '%"></div></div></div>';
   }
 
   function renderAct() {
@@ -238,14 +333,14 @@
       '<input type="range" id="mix" min="0" max="100" step="5" value="' + longPct + '" aria-label="Share of borrowing in 10-year bonds">' +
       '<div class="gauges" id="gauges">' + gauges(pv) + '</div>' +
       '<div class="actions"><button class="primary" id="issueBtn" type="button">Hold the auctions</button></div>' +
-      '<p class="hint">The black tick is roughly how much each group of buyers wants this turn. Selling beyond it pushes yields up. Bills always come due next turn; bonds lock in for five turns.</p>';
+      '<p class="hint">The shaded band is the estimate of what buyers want; the real number is revealed at the auction. Selling beyond it pushes yields up. Bills always come due next turn; bonds lock in for five turns.</p>';
     $('#mix').addEventListener('input', onSlide);
     $('#issueBtn').addEventListener('click', issue);
   }
 
   function gauges(pv) {
-    return gauge('gS', 'Bills', 'bills', pv.S, brief.demand.capS, pv.shortStatus, 'var(--bill)') +
-      gauge('gL', 'Bonds', 'bonds', pv.L, brief.demand.capL, pv.longStatus, 'var(--bond)');
+    return gauge('gS', 'Bills', 'bills', pv.S, brief.demand.rangeS, pv.shortStatus, 'var(--bill)') +
+      gauge('gL', 'Bonds', 'bonds', pv.L, brief.demand.rangeL, pv.longStatus, 'var(--bond)');
   }
 
   function onSlide(e) {
@@ -375,13 +470,13 @@
     if (!b) return;
     const rows = b.demand.rows.map((r) =>
       '<tr><td>' + esc(r.name) + (r.notes.length ? '<span class="note">' + esc(r.notes.join(' · ')) + '</span>' : '') + '</td>' +
-      '<td class="r num bills">' + (r.s ? fmtT(r.s) : '–') + '</td>' +
-      '<td class="r num bonds">' + (r.l ? (r.l < 0 ? '−' + fmtT(-r.l) : fmtT(r.l)) : '–') + '</td></tr>').join('');
+      '<td class="r num bills">' + (r.s ? '~' + fmtT(r.s) : '–') + '</td>' +
+      '<td class="r num bonds">' + (r.l ? (r.l < 0 ? '−' + fmtT(-r.l) : '~' + fmtT(r.l)) : '–') + '</td></tr>').join('');
     $('#buyers').innerHTML =
-      '<span class="label">Who buys this turn</span>' +
+      '<span class="label">Who buys this turn (estimates)</span>' +
       '<table class="buyers"><thead><tr><th>Buyer</th><th class="r">Bills held</th><th class="r">New bonds</th></tr></thead>' +
       '<tbody>' + rows + '</tbody>' +
-      '<tfoot><tr><td>Total appetite</td><td class="r num bills">' + fmtT(b.demand.capS) + '</td><td class="r num bonds">' + fmtT(b.demand.capL) + '</td></tr></tfoot></table>';
+      '<tfoot><tr><td>Total appetite</td><td class="r num bills">' + range(b.demand.rangeS) + '</td><td class="r num bonds">' + range(b.demand.rangeL) + '</td></tr></tfoot></table>';
   }
 
   // ---- end of game -------------------------------------------------------

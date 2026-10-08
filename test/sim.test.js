@@ -69,3 +69,18 @@ test('balanced borrowing survives more often than all bills or all bonds', () =>
   assert.ok(balanced > wins(0));
   assert.ok(balanced > wins(1));
 });
+
+test('true auction demand stays near the published estimate', () => {
+  for (let s = 1; s <= 100; s++) {
+    const world = R.createWorld(s);
+    const st = R.newGame(world);
+    while (!st.over) {
+      const b = R.beginTurn(st, world);
+      for (const [est, actual] of [[b.demand.capL, b.demand.actualL], [b.demand.capS, b.demand.actualS]]) {
+        assert.ok(Math.abs(actual / est - 1) <= 0.15 + 1e-9);
+      }
+      assert.ok(b.demand.rangeL[0] < b.demand.capL && b.demand.capL < b.demand.rangeL[1]);
+      R.resolveTurn(st, 0.35);
+    }
+  }
+});
