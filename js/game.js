@@ -262,11 +262,21 @@
       : a.tailBp > 0 ? '<span class="tone-warn">Tailed ' + a.tailBp + ' bp</span>'
       : a.pressureL < -0.15 ? '<span class="tone-good">Strong demand</span>' : '<span class="tone-neutral">Cleared smoothly</span>';
     const billText = a.pressureS > 0.5 ? '<span class="tone-warn">Bills cheapened to attract buyers</span>' : '<span class="tone-neutral">Priced near the Fed rate</span>';
+    const idx = st.history.indexOf(h);
+    const prev = idx > 0 ? st.history[idx - 1] : st.initial;
+    // Higher yields cost the Treasury more, so up reads as a warning.
+    const move = (now, before) => {
+      const d = now - before;
+      const cls = Math.abs(d) < 0.01 ? 'tone-neutral' : d > 0 ? 'tone-warn' : 'tone-good';
+      return '<div class="move ' + cls + '"><span class="arrow" aria-hidden="true">' + arrow(d) + '</span> ' +
+        (Math.abs(d) < 0.01 ? 'unchanged' : (d > 0 ? 'up ' : 'down ') + Math.abs(d).toFixed(2) + ' pts') +
+        ' <span class="from">from ' + pct(before, 2) + '</span></div>';
+    };
     $('#act').innerHTML =
       '<span class="label">Auction results · ' + brief.congress + 'th Congress</span>' +
       '<div class="auction">' +
-      '<div class="box"><span class="label bills">Bills · ' + fmtT(a.S) + '</span><div class="y num" data-count="' + h.y1 + '">' + pct(h.y1, 2) + '</div><div class="sub">' + billText + '</div></div>' +
-      '<div class="box"><span class="label bonds">10-yr bonds · ' + fmtT(a.L) + '</span><div class="y num" data-count="' + h.y10 + '">' + pct(h.y10, 2) + '</div><div class="sub">' + tailText + '</div></div>' +
+      '<div class="box"><span class="label bills">Bills · ' + fmtT(a.S) + '</span><div class="y num" data-count="' + h.y1 + '">' + pct(h.y1, 2) + '</div>' + move(h.y1, prev.y1) + '<div class="sub">' + billText + '</div></div>' +
+      '<div class="box"><span class="label bonds">10-yr bonds · ' + fmtT(a.L) + '</span><div class="y num" data-count="' + h.y10 + '">' + pct(h.y10, 2) + '</div>' + move(h.y10, prev.y10) + '<div class="sub">' + tailText + '</div></div>' +
       '</div>' +
       '<ul class="lines">' + h.lines.map((l) => '<li class="tone-' + l.tone + '"><span>' + esc(l.text) + '</span></li>').join('') + '</ul>' +
       '<div class="actions"><button class="primary" id="nextBtn" type="button">' + (st.over ? 'See how you did' : 'Next Congress →') + '</button></div>';

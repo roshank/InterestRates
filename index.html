@@ -173,7 +173,10 @@ input[type=range] { width: 100%; accent-color: var(--ink); height: 28px; margin:
 .auction { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-bottom: 14px; }
 .auction .box { border: 1px solid var(--rule); border-radius: 4px; padding: 10px 12px; }
 .auction .box .y { font-family: var(--mono); font-size: 26px; font-weight: 500; }
-.auction .box .sub { font-size: 12.5px; color: var(--muted); }
+.auction .box .sub { font-size: 12.5px; color: var(--muted); margin-top: 4px; }
+.auction .move { font-family: var(--mono); font-size: 13.5px; font-weight: 500; }
+.auction .move .arrow { font-size: 15px; }
+.auction .move .from { color: var(--muted); font-weight: 400; }
 .lines { display: grid; gap: 8px; margin-bottom: 16px; padding: 0; list-style: none; }
 .lines li { font-size: 14px; padding-left: 14px; position: relative; max-width: 66ch; }
 .lines li::before { content: ""; position: absolute; left: 0; top: 0.55em; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
