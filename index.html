@@ -1,0 +1,281 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Rollover</title>
+<meta name="description" content="A five-minute learning game: run U.S. Treasury borrowing and see how the Fed, Congress, and bond buyers move the 10-year yield.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@112..125,600..900&family=IBM+Plex+Mono:wght@400;500&family=Public+Sans:ital,wght@0,400;0,600;0,700;1,400&display=swap">
+<style>
+/* Layout: a Treasury desk. Briefing and decision on the left, market instruments on the right; one column on phones. */
+:root {
+  --paper: #edf0ec;
+  --card: #f9faf7;
+  --ink: #17212a;
+  --muted: #5a6670;
+  --rule: #d2d8d2;
+  --bill: #2b6ca3;
+  --bond: #8a5a14;
+  --fedc: #6a7480;
+  --good: #2f7a4f;
+  --warn: #b85a1c;
+  --bad: #b42318;
+  --track: #dfe4df;
+  --overlay: rgba(23, 33, 42, 0.55);
+  --display: "Archivo", "Arial Narrow", "Helvetica Neue", Arial, sans-serif;
+  --body: "Public Sans", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #11171a; --card: #182024; --ink: #e5ebe6; --muted: #98a4ab; --rule: #2b353a;
+    --bill: #72aee3; --bond: #d8a650; --fedc: #a3adb6; --good: #63c08a; --warn: #f0965a; --bad: #f2776e;
+    --track: #232c31; --overlay: rgba(0, 0, 0, 0.6);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #11171a; --card: #182024; --ink: #e5ebe6; --muted: #98a4ab; --rule: #2b353a;
+  --bill: #72aee3; --bond: #d8a650; --fedc: #a3adb6; --good: #63c08a; --warn: #f0965a; --bad: #f2776e;
+  --track: #232c31; --overlay: rgba(0, 0, 0, 0.6);
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { margin: 0; }
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font: 15px/1.5 var(--body);
+  padding-inline: 16px;
+  padding-block: 0 40px;
+}
+h1, h2, h3 { font-family: var(--display); font-stretch: 118%; margin: 0; text-wrap: balance; line-height: 1.1; }
+p { margin: 0; }
+button { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--bill); outline-offset: 2px; }
+.num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.label {
+  font-size: 11px; text-transform: uppercase; letter-spacing: 0.09em; font-weight: 700; color: var(--muted);
+}
+.wrap { max-width: 1180px; margin: 0 auto; }
+
+/* Header */
+header.top {
+  display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 12px 24px;
+  padding-block: 20px 14px; border-bottom: 2px solid var(--ink); margin-bottom: 18px;
+}
+.brand h1 { font-size: 30px; font-weight: 900; letter-spacing: 0.02em; font-stretch: 125%; }
+.brand p { color: var(--muted); font-size: 13px; }
+.controls { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.chipbtn {
+  border: 1px solid var(--rule); background: var(--card); border-radius: 4px; padding: 4px 10px; font-size: 12px; cursor: pointer;
+}
+.chipbtn[aria-pressed="true"] { border-color: var(--ink); }
+
+.track { display: grid; grid-template-columns: repeat(10, 1fr); gap: 3px; width: 100%; margin-bottom: 18px; }
+.track .cell {
+  background: var(--track); border-radius: 2px; padding: 4px 0 3px; text-align: center; font-size: 10.5px; color: var(--muted);
+  font-family: var(--mono); line-height: 1.2;
+}
+.track .cell b { display: block; font-weight: 500; font-size: 11px; color: var(--ink); }
+.track .cell.now { background: var(--ink); color: var(--paper); }
+.track .cell.now b { color: var(--paper); }
+.track .cell.done { background: color-mix(in srgb, var(--good) 22%, var(--track)); }
+.track .cell.hurt { background: color-mix(in srgb, var(--warn) 30%, var(--track)); }
+.track .cell.fail { background: color-mix(in srgb, var(--bad) 40%, var(--track)); }
+
+/* Grid */
+.desk { display: grid; gap: 16px; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); align-items: start; }
+.col { display: grid; gap: 16px; align-content: start; min-width: 0; }
+@media (max-width: 900px) {
+  .desk { grid-template-columns: minmax(0, 1fr); }
+  .col { display: contents; }
+  #brief { order: 1; } #econ { order: 2; } #need { order: 3; } #act { order: 4; } #market { order: 5; } #buyers { order: 6; }
+}
+.panel { background: var(--card); border: 1px solid var(--rule); border-radius: 6px; padding: 16px; min-width: 0; }
+.panel > .label { display: block; margin-bottom: 10px; }
+
+/* Briefing */
+.congress { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+.congress h2 { font-size: 22px; font-weight: 800; }
+.events { display: grid; gap: 12px; }
+.event { border-top: 1px solid var(--rule); padding-top: 12px; display: grid; gap: 6px; }
+.event:first-child { border-top: 0; padding-top: 0; }
+.event .cat { font-size: 10.5px; letter-spacing: 0.1em; text-transform: uppercase; font-weight: 700; color: var(--muted); }
+.event h3 { font-size: 19px; font-weight: 800; font-stretch: 112%; }
+.event .lesson { font-size: 13.5px; color: var(--muted); border-left: 2px solid var(--rule); padding-left: 10px; max-width: 64ch; }
+.event .lesson b { color: var(--ink); font-weight: 600; }
+
+/* Economy */
+.stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+@media (max-width: 420px) { .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.stat .v { font-family: var(--mono); font-size: 22px; font-weight: 500; font-variant-numeric: tabular-nums; }
+.stat .d { font-size: 12px; color: var(--muted); font-family: var(--mono); }
+.up { color: var(--warn); } .down { color: var(--good); }
+.fedline { margin-top: 12px; font-size: 13.5px; display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.pill { font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; border-radius: 3px; padding: 2px 7px; border: 1px solid currentColor; white-space: nowrap; }
+
+/* Need */
+.needhead { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.needhead .big { font-family: var(--display); font-weight: 900; font-size: 40px; font-stretch: 125%; }
+.stack { display: flex; height: 16px; border-radius: 3px; overflow: hidden; margin: 10px 0 8px; background: var(--track); }
+.stack span { display: block; height: 100%; }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 12.5px; color: var(--muted); }
+.legend i { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 6px; vertical-align: 0; }
+.legend .num { color: var(--ink); }
+
+/* Decision */
+.slider-row { display: grid; grid-template-columns: 1fr auto 1fr; align-items: end; gap: 8px; margin-bottom: 8px; }
+.slider-row .side .num { font-size: 20px; display: block; }
+.slider-row .right { text-align: right; }
+.slider-row .mid { font-family: var(--mono); font-size: 13px; color: var(--muted); text-align: center; }
+input[type=range] { width: 100%; accent-color: var(--ink); height: 28px; margin: 0; }
+.bills { color: var(--bill); } .bonds { color: var(--bond); }
+.gauges { display: grid; gap: 12px; margin: 14px 0; }
+.gauge .head { display: flex; justify-content: space-between; gap: 8px; font-size: 12.5px; margin-bottom: 4px; flex-wrap: wrap; }
+.gauge .bar { position: relative; height: 12px; background: var(--track); border-radius: 2px; }
+.gauge .fill { position: absolute; inset: 0 auto 0 0; border-radius: 2px; transition: width 0.15s; }
+.gauge .cap { position: absolute; top: -4px; bottom: -4px; width: 2px; background: var(--ink); transition: left 0.15s; }
+.tone-good { color: var(--good); } .tone-warn { color: var(--warn); } .tone-bad { color: var(--bad); } .tone-neutral { color: var(--muted); }
+.actions { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.primary {
+  background: var(--ink); color: var(--paper); border: 0; border-radius: 4px; padding: 11px 20px; font-weight: 700; cursor: pointer;
+  font-family: var(--display); font-stretch: 112%; letter-spacing: 0.02em; font-size: 15px;
+}
+.primary:hover { filter: brightness(1.15); }
+.clock { flex: 1; min-width: 120px; }
+.clock .bar { height: 4px; background: var(--track); border-radius: 2px; overflow: hidden; }
+.clock .bar span { display: block; height: 100%; background: var(--muted); width: 100%; }
+.clock .t { font-size: 12px; color: var(--muted); font-family: var(--mono); }
+.hint { font-size: 12.5px; color: var(--muted); margin-top: 10px; max-width: 62ch; }
+
+/* Results */
+.auction { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-bottom: 14px; }
+.auction .box { border: 1px solid var(--rule); border-radius: 4px; padding: 10px 12px; }
+.auction .box .y { font-family: var(--mono); font-size: 26px; font-weight: 500; }
+.auction .box .sub { font-size: 12.5px; color: var(--muted); }
+.lines { display: grid; gap: 8px; margin-bottom: 16px; padding: 0; list-style: none; }
+.lines li { font-size: 14px; padding-left: 14px; position: relative; max-width: 66ch; }
+.lines li::before { content: ""; position: absolute; left: 0; top: 0.55em; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.lines li span { color: var(--ink); }
+
+/* Charts */
+.chart { width: 100%; height: auto; display: block; overflow: visible; }
+.chart text { fill: var(--muted); font-family: var(--mono); font-size: 9.5px; }
+.chart .grid { stroke: var(--rule); stroke-width: 1; }
+.keys { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+.keys i { display: inline-block; width: 14px; height: 3px; margin-right: 6px; vertical-align: 3px; border-radius: 2px; }
+.metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--rule); }
+.metrics .num { font-size: 18px; display: block; }
+.subhead { margin: 16px 0 6px; }
+
+/* Buyers */
+table.buyers { width: 100%; border-collapse: collapse; font-size: 13px; }
+table.buyers th { text-align: left; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-weight: 700; padding: 0 6px 6px 0; }
+table.buyers th.r, table.buyers td.r { text-align: right; }
+table.buyers td { border-top: 1px solid var(--rule); padding: 7px 6px 7px 0; vertical-align: top; }
+table.buyers td .note { display: block; font-size: 11.5px; color: var(--muted); }
+table.buyers tfoot td { font-weight: 700; }
+
+/* Overlays */
+.overlay { position: fixed; inset: 0; background: var(--overlay); display: grid; place-items: center; padding: 16px; z-index: 10; overflow-y: auto; }
+.sheet {
+  background: var(--card); border-radius: 8px; max-width: 760px; width: 100%; padding: 28px; display: grid; gap: 18px;
+  border-top: 6px solid var(--ink); max-height: calc(100% - 8px); overflow-y: auto;
+}
+.sheet h2 { font-size: 34px; font-weight: 900; font-stretch: 125%; }
+.sheet .lead { font-size: 16.5px; max-width: 60ch; }
+.defs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+@media (max-width: 600px) { .defs, .auction { grid-template-columns: minmax(0, 1fr); } .sheet { padding: 20px; } }
+.def { border: 1px solid var(--rule); border-radius: 4px; padding: 12px 14px; display: grid; gap: 4px; font-size: 14px; }
+.def h3 { font-size: 17px; font-weight: 800; }
+.def.b h3 { color: var(--bill); } .def.l h3 { color: var(--bond); }
+.rules { font-size: 14px; display: grid; gap: 4px; padding-left: 18px; margin: 0; }
+.seedrow { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; font-size: 13px; color: var(--muted); }
+.seedrow input { font-family: var(--mono); width: 9ch; padding: 6px 8px; border: 1px solid var(--rule); border-radius: 4px; background: var(--paper); color: var(--ink); }
+.cmp { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+.cmp th { text-align: left; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); padding: 0 8px 6px 0; }
+.cmp td { border-top: 1px solid var(--rule); padding: 8px 8px 8px 0; }
+.cmp tr.you td { font-weight: 700; }
+.cmp .r { text-align: right; }
+.tablewrap { overflow-x: auto; }
+.recap { display: grid; gap: 10px; font-size: 13.5px; padding: 0; margin: 0; list-style: none; }
+.recap b { display: block; font-size: 14px; }
+.verdict { font-size: 13px; text-transform: uppercase; letter-spacing: 0.1em; font-weight: 700; }
+
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="brand">
+      <h1>ROLLOVER</h1>
+      <p>You manage U.S. Treasury borrowing. Congress spends; you find the money.</p>
+    </div>
+    <div class="controls">
+      <span class="label" id="seedLabel"></span>
+      <button class="chipbtn" id="clockBtn" type="button" aria-pressed="true">Clock: on</button>
+      <button class="chipbtn" id="helpBtn" type="button">How to play</button>
+    </div>
+  </header>
+  <div class="track" id="track" aria-label="Game progress by Congress"></div>
+
+  <main class="desk">
+    <div class="col">
+      <section class="panel" id="brief" aria-live="polite"></section>
+      <section class="panel" id="need"></section>
+      <section class="panel" id="act"></section>
+    </div>
+    <div class="col">
+      <section class="panel" id="econ"></section>
+      <section class="panel" id="market"></section>
+      <section class="panel" id="buyers"></section>
+    </div>
+  </main>
+</div>
+
+<div class="overlay" id="intro" hidden>
+  <div class="sheet" role="dialog" aria-labelledby="introTitle">
+    <span class="label">U.S. Department of the Treasury · Office of Debt Management</span>
+    <h2 id="introTitle">Keep America borrowing</h2>
+    <p class="lead">Every two years Congress tells you how much money it needs: this term's deficit, plus any old debt that has come due. You can't change the amount. You choose <b>how</b> to borrow it.</p>
+    <div class="defs">
+      <div class="def b">
+        <h3>Bills · short-term</h3>
+        <p>Treasury bills mature in a year or less, so they pay about what the Fed charges. Cheap when the Fed is low. But every bill comes due each turn and must be re-borrowed at whatever rates are then.</p>
+      </div>
+      <div class="def l">
+        <h3>Bonds · long-term</h3>
+        <p>10-year notes, standing in for everything from 2 to 30 years. You lock in today's rate for five turns. But the market sets that rate, and it rises when you sell more than buyers want.</p>
+      </div>
+    </div>
+    <ul class="rules">
+      <li>The Fed sets short rates by rule: it hikes when inflation runs hot and cuts when jobs are lost.</li>
+      <li>The 10-year yield is what markets expect the Fed to do for a decade, plus a <b>term premium</b> for the risk of lending long.</li>
+      <li>You lose if interest eats more than <b>35% of federal revenue</b> (it's about 18% today) or if <b>two auctions fail</b>.</li>
+      <li>10 turns, one per Congress, 2027 to 2047. About five minutes.</li>
+    </ul>
+    <div class="seedrow">
+      <button class="primary" id="startBtn" type="button">Take office</button>
+      <label for="seedInput">World #</label>
+      <input id="seedInput" inputmode="numeric" autocomplete="off">
+      <span>Same number, same history. Try it again with a different strategy.</span>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="end" hidden>
+  <div class="sheet" role="dialog" aria-labelledby="endTitle" id="endSheet"></div>
+</div>
+
+<script src="js/events.js"></script>
+<script src="js/sim.js"></script>
+<script src="js/game.js"></script>
+</body>
+</html>
