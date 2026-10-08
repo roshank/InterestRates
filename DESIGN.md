@@ -27,7 +27,9 @@ One turn is one Congress (two years). Ten turns run from 2027 to 2047.
 
 1. **Briefing.** Each turn opens with a full-size briefing: one or two event
    cards (Congress, economy, world, markets), each with a one-line "why it
-   matters," plus what the Fed just did and why. Dismissing it shrinks the
+   matters," the state of the country (growth, inflation, jobs, the Fed's move
+   and why), and a summary of which bond buyers are leaning in or pulling
+   back. Dismissing it shrinks the
    briefing into its panel on the desk, where it can be reopened.
 2. **The bill.** "Congress needs you to raise $X": this term's deficit
    spending, interest due, maturing bills, and maturing bonds.

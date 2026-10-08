@@ -232,8 +232,8 @@
         if (bs === 'QE') { s = 3; l = 7; notes.push('QE: buying bonds'); }
         if (bs === 'QT') { l = -2.5; notes.push('QT: letting bonds run off'); }
       }
-      if (mod.s > 0.08 || mod.l > 0.08) notes.unshift('event: buying more');
-      if (mod.s < -0.08 || mod.l < -0.08) notes.unshift('event: pulling back');
+      if (mod.s > 0.08 || mod.l > 0.08) notes.unshift('buying more after recent events');
+      if (mod.s < -0.08 || mod.l < -0.08) notes.unshift('pulling back after recent events');
       const scale = gdp / 100;
       return {
         id: b.id, name: b.name,

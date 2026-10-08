@@ -95,7 +95,7 @@ header.top {
 @media (max-width: 900px) {
   .desk { grid-template-columns: minmax(0, 1fr); }
   .col { display: contents; }
-  #brief { order: 1; } #econ { order: 2; } #need { order: 3; } #act { order: 4; } #market { order: 5; } #buyers { order: 6; }
+  #brief { order: 1; } #need { order: 2; } #act { order: 3; } #market { order: 4; } #buyers { order: 5; }
 }
 .panel { background: var(--card); border: 1px solid var(--rule); border-radius: 6px; padding: 16px; min-width: 0; }
 .panel > .label { display: block; margin-bottom: 10px; }
@@ -123,8 +123,12 @@ header.top {
 .news .events { gap: 22px; }
 .news .event { padding-top: 22px; }
 .news .event:first-child { padding-top: 0; }
-.fednote { font-size: 14px; color: var(--muted); border-top: 1px solid var(--rule); padding-top: 14px; }
-.fednote .label { margin-right: 6px; color: var(--ink); }
+.country { border-top: 1px solid var(--rule); padding-top: 14px; margin-top: 14px; display: grid; gap: 8px; }
+.news .country { margin-top: 0; }
+.country .fedline { margin-top: 4px; }
+.buyerlist { list-style: none; padding: 0; margin: 0; display: grid; gap: 4px; font-size: 14px; }
+.buyerlist b { font-weight: 600; margin-right: 4px; }
+.muted { color: var(--muted); font-size: 14px; }
 
 /* Economy */
 .stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
@@ -243,7 +247,6 @@ table.buyers tfoot td { font-weight: 700; }
       <section class="panel" id="act"></section>
     </div>
     <div class="col">
-      <section class="panel" id="econ"></section>
       <section class="panel" id="market"></section>
       <section class="panel" id="buyers"></section>
     </div>

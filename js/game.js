@@ -18,6 +18,7 @@
   let decisions = [];
   let phase = 'intro';     // intro | decide | result | end
   let share = 0.35;
+  let prevDemand = null;  // last turn's buyer appetite, for comparisons
 
   // ---- game flow -------------------------------------------------------
   function startGame(seed, replay) {
@@ -37,6 +38,7 @@
   }
 
   function nextTurn() {
+    prevDemand = brief && st.turn > 0 ? brief.demand : null;
     brief = R.beginTurn(st, world);
     phase = 'decide';
     render();
@@ -76,7 +78,8 @@
     $('#newsSheet').innerHTML =
       '<span class="label">' + b.congress + 'th Congress · ' + b.years[0] + '–' + b.years[1] + ' · Turn ' + (b.turn + 1) + ' of ' + R.TURNS + '</span>' +
       '<div class="events" id="newsTitle">' + b.events.map((e) => eventHTML(e, true)).join('') + '</div>' +
-      '<p class="fednote"><span class="label">Meanwhile</span> ' + esc(b.fed.reason) + '</p>' +
+      '<section class="country"><span class="label">State of the country</span>' + econHTML(b) + '</section>' +
+      '<section class="country"><span class="label">Bond buyers</span>' + buyersSummaryHTML(b) + '</section>' +
       '<div class="actions"><button class="primary" id="newsBtn" type="button">To the desk →</button></div>';
     show('#news');
     const sheet = $('#newsSheet');
@@ -113,7 +116,6 @@
   function render() {
     renderTrack();
     renderBrief();
-    renderEcon();
     renderNeed();
     renderAct();
     renderMarket();
@@ -139,14 +141,13 @@
     $('#brief').innerHTML =
       '<div class="congress"><h2>' + b.congress + 'th Congress</h2><span class="label">' + b.years[0] + '–' + b.years[1] + ' · Turn ' + (b.turn + 1) + ' of ' + R.TURNS + '</span></div>' +
       '<div class="events">' + b.events.map((e) => eventHTML(e, false)).join('') + '</div>' +
+      '<div class="country">' + econHTML(b) + '</div>' +
       (phase === 'decide' ? '<button class="chipbtn reopen" id="reopenBtn" type="button">Read the briefing again</button>' : '');
     const re = $('#reopenBtn');
     if (re) re.addEventListener('click', openNews);
   }
 
-  function renderEcon() {
-    const b = brief;
-    if (!b) return;
+  function econHTML(b) {
     const prev = b.turn === 0 ? st.initial : st.history[b.turn - 1];
     const stat = (label, v, d, invert) => {
       const cls = Math.abs(d) < 0.05 ? '' : (d > 0) !== !!invert ? 'up' : 'down';
@@ -155,15 +156,27 @@
     };
     const bsTone = b.fed.bs === 'QE' ? 'tone-good' : b.fed.bs === 'QT' ? 'tone-warn' : 'tone-neutral';
     const bsText = b.fed.bs === 'QE' ? 'QE: Fed buying bonds' : b.fed.bs === 'QT' ? 'QT: Fed shrinking its bonds' : 'Balance sheet steady';
-    $('#econ').innerHTML =
-      '<span class="label">Economy &amp; the Fed</span>' +
-      '<div class="stats">' +
+    return '<div class="stats">' +
       stat('Growth', b.econ.growth, b.econ.growth - prev.growth, true) +
       stat('Inflation', b.econ.inf, b.econ.inf - prev.inf) +
       stat('Jobless', b.econ.unemp, b.econ.unemp - prev.unemp) +
       stat('Fed rate', b.fed.rate, b.fed.rate - b.fed.prev) +
       '</div>' +
       '<p class="fedline"><span>' + esc(b.fed.reason) + '</span> <span class="pill ' + bsTone + '">' + bsText + '</span></p>';
+  }
+
+  // What's publicly visible about buyers: who is leaning in or pulling back.
+  function buyersSummaryHTML(b) {
+    const moves = b.demand.rows.filter((r) => r.notes.length)
+      .map((r) => '<li><b>' + esc(r.name) + '</b> ' + esc(r.notes.join(', ')) + '</li>');
+    const change = (now, before) => {
+      if (!before) return '';
+      const d = now - before;
+      return Math.abs(d) < 0.15 ? ' (about the same)' : ' (' + (d > 0 ? 'up ' : 'down ') + fmtT(Math.abs(d)) + ')';
+    };
+    return (moves.length ? '<ul class="buyerlist">' + moves.join('') + '</ul>' : '<p class="muted">No big shifts among buyers this turn.</p>') +
+      '<p class="muted">Appetite this turn: about <span class="num bills">' + fmtT(b.demand.capS) + '</span> of bills' + change(b.demand.capS, prevDemand && prevDemand.capS) +
+      ' and <span class="num bonds">' + fmtT(b.demand.capL) + '</span> of new bonds' + change(b.demand.capL, prevDemand && prevDemand.capL) + '.</p>';
   }
 
   function renderNeed() {
