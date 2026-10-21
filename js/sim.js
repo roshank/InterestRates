@@ -17,10 +17,19 @@
   const FIRST_CONGRESS = 120;
   const R_STAR = 0.75;         // neutral real rate
   const INF_TARGET = 2;
+  const FED_NEUTRAL = R_STAR + INF_TARGET;  // Fed rate that neither brakes nor boosts
   const LONG_NEUTRAL = 4.2;    // 10y level that neither helps nor hurts the economy
   const CRISIS_INT_REV = 35;   // lose if interest exceeds this % of revenue
   const MAX_STRIKES = 2;       // lose after this many failed auctions
   const START_GDP = 30;
+  // Credit ratings. The U.S. starts at AA+ (where S&P put it in 2011, Fitch
+  // in 2023, Moody's in 2025). Crossing a threshold costs a notch; each
+  // notch below AA+ adds to the term premium for good.
+  const RATINGS = ['AAA', 'AA+', 'AA', 'AA-', 'A+', 'A'];
+  const START_RATING = 1;
+  const DOWNGRADE_DEBT = [Infinity, 130, 142, 154, 166];  // debt/GDP % to lose the next notch
+  const DOWNGRADE_IR = [Infinity, 28, 31, 33, 34];          // interest/revenue % to lose it
+  const NOTCH_PREMIUM = 0.2;
   const DEMAND_SPREAD = 0.12;  // public estimates of demand are +/- this much
   const DEMAND_NOISE = 0.06;   // how far true demand strays from the estimate
 
@@ -134,7 +143,7 @@
     return 0.35 * fedRate + 0.65 * (R_STAR + INF_TARGET + 0.4 * (inf - INF_TARGET));
   }
 
-  function termPremium({ debtRatio, inf, pressureL, intRev, tpShock }) {
+  function termPremium({ debtRatio, inf, pressureL, intRev, tpShock, rating }) {
     const parts = {
       base: 0.3,
       debt: 1.8 * (debtRatio - 1.0),
@@ -142,6 +151,7 @@
       supply: pressureL > 0 ? 1.3 * pressureL : 0.5 * Math.max(pressureL, -0.6),
       burden: intRev > 20 ? 0.05 * (intRev - 20) : 0,
       shock: tpShock,
+      rating: NOTCH_PREMIUM * Math.max(0, (rating == null ? START_RATING : rating) - START_RATING),
     };
     parts.total = sum(Object.values(parts));
     return parts;
@@ -164,7 +174,7 @@
     const longStock = debt - shortStock;
     // Coupons on 10-year notes issued roughly 2017, 2019, 2021, 2023, 2025.
     const coupons = [2.4, 2.0, 1.6, 4.0, 4.4];
-    const vintages = coupons.map((rate, i) => ({ amount: longStock / LONG_TURNS, rate, matures: i }));
+    const vintages = coupons.map((rate, i) => ({ amount: longStock / LONG_TURNS, rate, matures: i, fedPart: 0 }));
     const fedRate = roundFed(fedTarget(s0.inf, s0.gap));
     const shortRate = fedRate + 0.1;
     const st = {
@@ -176,6 +186,10 @@
       tpShock: 0, lastDy10: 0,
       buyerMods: {},
       strikes: 0, interestPaid: 0,
+      // Where new debt came from, and what the Fed's moves since the start
+      // have added to (or saved on) the interest bill.
+      fed0: FED_NEUTRAL, fromSpending: 0, fromInterest: 0, fedCost: 0,
+      rating: START_RATING, ratingNews: null,
       over: false, won: false, lossReason: null,
       history: [], brief: null,
     };
@@ -214,6 +228,13 @@
       intRev: st.intRev,
       avgMaturity: avgMaturity(st, st.turn),
       interestPaid: st.interestPaid,
+      fromSpending: st.fromSpending, fromInterest: st.fromInterest, fedCost: st.fedCost,
+      rating: RATINGS[st.rating], ratingIdx: st.rating,
+      billInt: st.shortStock * st.y1 / 100,
+      bondInt: sum(st.vintages.map((v) => v.amount * v.rate / 100)),
+      // $B per year that a 1-pt Fed hike adds: bills reprice fully; bonds
+      // coming due next turn reprice partly (long rates follow the Fed ~35%).
+      exposureB: (st.shortStock + 0.35 * sum(st.vintages.filter((v) => v.matures === st.turn).map((v) => v.amount))) * 10,
     }, extra || {});
   }
 
@@ -322,6 +343,12 @@
     const intAnnual = annualInterest(st.shortStock, billRate, st.vintages);
     const primary = primaryPct / 100 * gdpAvg * YEARS;
     const interest = intAnnual * YEARS;
+    // Extra interest this turn because the Fed is above (or below) neutral: bills pay today's rate; bonds carry the Fed part of their
+    // yield from the day they were sold.
+    const fedCost = (st.shortStock * (st.fedRate - st.fed0) +
+      sum(st.vintages.map((v) => v.amount * (v.fedPart || 0)))) / 100 * YEARS;
+    const ratingNews = st.ratingNews;
+    st.ratingNews = null;
     const rollLong = sum(st.vintages.filter((v) => v.matures === t).map((v) => v.amount));
     const rollShort = st.shortStock;
     const need = Math.max(0.5, primary + interest + rollShort + rollLong);
@@ -343,6 +370,7 @@
       fed: { rate: st.fedRate, prev: prevFed, reason: fedReason, bs },
       budget: { spendPct: spendNow, revenuePct: rev, primaryPct, deficitPct: (primary + interest) / gdpAvg / YEARS * 100 },
       need: { primary, interest, rollShort, rollLong, total: need },
+      fedCost, ratingNews, rating: RATINGS[st.rating], debtStart: st.debt, gdpStart: st.gdp,
       demand,
       gdpEnd, rev,
     };
@@ -397,7 +425,7 @@
     if (failed) { st.strikes += 1; }
 
     const debtRatioStart = st.debt / st.gdp;
-    st.tp = termPremium({ debtRatio: debtRatioStart, inf: st.inf, pressureL, intRev: st.intRev, tpShock: st.tpShock + (failed ? 0.8 : 0) });
+    st.tp = termPremium({ debtRatio: debtRatioStart, inf: st.inf, pressureL, intRev: st.intRev, tpShock: st.tpShock + (failed ? 0.8 : 0), rating: st.rating });
     st.expPath = expectedPath(st.fedRate, st.inf);
     st.y10 = Math.max(0.3, st.expPath + st.tp.total);
     const shortSpread = clamp(0.45 * pressureS, -0.25, 1.5);
@@ -405,14 +433,18 @@
 
     // Books
     st.vintages = st.vintages.filter((v) => v.matures !== t);
-    if (L > 0.001) st.vintages.push({ amount: L, rate: st.y10, matures: t + LONG_TURNS });
+    if (L > 0.001) st.vintages.push({ amount: L, rate: st.y10, matures: t + LONG_TURNS, fedPart: 0.35 * (st.fedRate - st.fed0) });
     st.shortStock = S;
     st.shortRate = st.y1;
     st.debt += b.need.primary + b.need.interest;
     st.gdp = b.gdpEnd;
     st.interestPaid += b.need.interest;
+    st.fromSpending += b.need.primary;
+    st.fromInterest += b.need.interest;
+    st.fedCost += b.fedCost;
     const revenue = b.rev / 100 * st.gdp;
     st.intRev = annualInterest(st.shortStock, st.y1, st.vintages) / revenue * 100;
+    const ratingChange = reviewRating(st);
 
     // Fade temporary forces
     st.tpShock = (st.tpShock + (failed ? 0.8 : 0)) * 0.5;
@@ -431,7 +463,7 @@
     };
 
     const lines = debrief({
-      st, b, auction, longShare, prevY10, prevY1, prevTp, prevExp, prevIntRev,
+      st, b, auction, longShare, prevY10, prevY1, prevTp, prevExp, prevIntRev, ratingChange,
     });
 
     st.turn += 1;
@@ -447,30 +479,47 @@
     return entry;
   }
 
+  // Ratings agencies look at the debt load and the interest burden. A
+  // downgrade is sticky: it takes a clear improvement to win a notch back.
+  function reviewRating(st) {
+    const dr = st.debt / st.gdp * 100;
+    const i = st.rating;
+    let to = i;
+    if (i < RATINGS.length - 1 && (dr > DOWNGRADE_DEBT[i] || st.intRev > DOWNGRADE_IR[i])) to = i + 1;
+    else if (i > START_RATING && dr < DOWNGRADE_DEBT[i - 1] - 12 && st.intRev < DOWNGRADE_IR[i - 1] - 7) to = i - 1;
+    if (to === i) return null;
+    const change = { from: RATINGS[i], to: RATINGS[to], down: to > i, why: dr > DOWNGRADE_DEBT[i] ? 'debt' : 'interest' };
+    st.rating = to;
+    st.ratingNews = change;
+    if (change.down) st.tpShock += 0.25;
+    return change;
+  }
+
   const TP_LABELS = {
     supply: 'your bond supply vs. demand',
     debt: 'debt load',
     inflation: 'inflation uncertainty',
     burden: 'interest-burden worries',
     shock: 'event turmoil',
+    rating: 'credit rating',
   };
 
-  function debrief({ st, b, auction, longShare, prevY10, prevY1, prevTp, prevExp, prevIntRev }) {
+  function debrief({ st, b, auction, longShare, prevY10, prevY1, prevTp, prevExp, prevIntRev, ratingChange }) {
     const lines = [];
     const fmt = (x) => '$' + x.toFixed(1) + 'T';
     // Auction
     const range = (r) => '$' + r[0].toFixed(1) + '–' + r[1].toFixed(1) + 'T';
     const est = auction.estL;
     const surprise = auction.capL > est[1] ? ', more than expected' : auction.capL < est[0] ? ', less than expected' : '';
-    lines.push({ tone: 'neutral', text: 'Bond buyers turned out to want ' + fmt(auction.capL) + ' (estimate ' + range(est) + surprise + ').' });
+    const vsEst = ' (estimate was ' + range(est) + surprise + ')';
     if (auction.failed) {
-      lines.push({ tone: 'bad', text: 'Failed auction. You offered ' + fmt(auction.L) + ' of 10-year bonds but buyers only wanted about ' + fmt(auction.capL) + '. Dealers were stuck with the rest, yields spiked, and markets will remember. (' + st.strikes + ' of ' + MAX_STRIKES + ' strikes)' });
+      lines.push({ tone: 'bad', text: 'Failed auction. You offered ' + fmt(auction.L) + ' of 10-year bonds but buyers only wanted about ' + fmt(auction.capL) + vsEst + '. Dealers were stuck with the rest, yields spiked, and markets will remember. (' + st.strikes + ' of ' + MAX_STRIKES + ' strikes)' });
     } else if (auction.pressureL > 0.1) {
-      lines.push({ tone: 'warn', text: 'The 10-year auction tailed. You sold ' + fmt(auction.L) + ' into about ' + fmt(auction.capL) + ' of demand, so buyers demanded about ' + auction.tailBp + ' basis points of extra yield. Without that, the 10-year would have cleared near ' + (st.y10 - st.tp.supply).toFixed(2) + '%.' });
+      lines.push({ tone: 'warn', text: 'The 10-year auction tailed. You sold ' + fmt(auction.L) + ' into about ' + fmt(auction.capL) + ' of demand' + vsEst + ', so buyers demanded about ' + auction.tailBp + ' basis points of extra yield. Without that, the 10-year would have cleared near ' + (st.y10 - st.tp.supply).toFixed(2) + '%.' });
     } else if (auction.pressureL < -0.15) {
-      lines.push({ tone: 'good', text: 'Strong 10-year auction. Buyers wanted about ' + fmt(auction.capL) + ' and you sold only ' + fmt(auction.L) + ', so they competed and kept yields low.' });
+      lines.push({ tone: 'good', text: 'Strong 10-year auction. Buyers wanted about ' + fmt(auction.capL) + vsEst + ' and you sold only ' + fmt(auction.L) + ', so they competed and kept yields low.' });
     } else {
-      lines.push({ tone: 'neutral', text: 'The 10-year auction went smoothly: ' + fmt(auction.L) + ' sold against about ' + fmt(auction.capL) + ' of demand.' });
+      lines.push({ tone: 'neutral', text: 'The 10-year auction went smoothly: ' + fmt(auction.L) + ' sold against about ' + fmt(auction.capL) + ' of demand' + vsEst + '.' });
     }
     if (auction.pressureS > 0.5) {
       lines.push({ tone: 'warn', text: 'You leaned hard on bills: ' + fmt(auction.S) + ' outstanding against about ' + fmt(auction.capS) + ' of demand. Bill yields rose above the Fed rate to attract buyers.' });
@@ -505,12 +554,21 @@
       lines.push({ tone: 'warn', text: Math.round(shortShare) + '% of the debt is now in bills. Every 1 pt the Fed hikes adds about $' + Math.round(perPoint) + 'B a year in interest.' });
     }
 
-    // Interest burden
+    // Debt growth: spending vs. interest, what the Fed added, and the burden
+    const n = b.need;
     const dIR = st.intRev - prevIntRev;
-    lines.push({
-      tone: st.intRev > 25 ? 'bad' : dIR > 1 ? 'warn' : 'neutral',
-      text: 'Interest now takes ' + st.intRev.toFixed(1) + '% of federal revenue (' + (dIR >= 0 ? 'up ' : 'down ') + Math.abs(dIR).toFixed(1) + ' pts). Debt is ' + (st.debt / st.gdp * 100).toFixed(0) + '% of GDP.',
-    });
+    let debtText = 'Debt grew ' + fmt(n.primary + n.interest) + ': ' + fmt(Math.max(0, n.primary)) + ' for spending, ' + fmt(n.interest) + ' for interest';
+    if (Math.abs(b.fedCost) >= 0.05) debtText += b.fedCost > 0
+      ? ' (' + fmt(b.fedCost) + ' of it because the Fed is above neutral)'
+      : ' (below-neutral Fed rates saved ' + fmt(-b.fedCost) + ')';
+    debtText += '. Interest now takes ' + st.intRev.toFixed(1) + '% of revenue (' + (dIR >= 0 ? 'up ' : 'down ') + Math.abs(dIR).toFixed(1) + ' pts); debt is ' + (st.debt / st.gdp * 100).toFixed(0) + '% of GDP.';
+    lines.push({ tone: st.intRev > 25 ? 'bad' : n.interest > Math.max(0, n.primary) || dIR > 1 ? 'warn' : 'neutral', text: debtText });
+
+    if (ratingChange) {
+      lines.push(ratingChange.down
+        ? { tone: 'bad', text: 'Downgrade: a ratings agency cut the U.S. from ' + ratingChange.from + ' to ' + ratingChange.to + ' over ' + (ratingChange.why === 'debt' ? 'the rising debt load' : 'the growing interest burden') + '. Buyers will demand more yield on every bond from now on.' }
+        : { tone: 'good', text: 'Upgrade: with debt and interest improving, the U.S. rating rose from ' + ratingChange.from + ' to ' + ratingChange.to + '. Borrowing gets a little cheaper.' });
+    }
     return lines;
   }
 
@@ -535,7 +593,7 @@
   ];
 
   const api = {
-    TURNS, YEARS, START_YEAR, FIRST_CONGRESS, CRISIS_INT_REV, MAX_STRIKES, BUYERS, STRATEGIES,
+    TURNS, YEARS, START_YEAR, FIRST_CONGRESS, CRISIS_INT_REV, MAX_STRIKES, BUYERS, STRATEGIES, RATINGS, FED_NEUTRAL,
     EVENTS, BY_ID,
     createWorld, newGame, beginTurn, previewAuction, resolveTurn, simulate, randomSeed,
   };

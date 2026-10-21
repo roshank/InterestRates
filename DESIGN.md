@@ -54,6 +54,33 @@ One turn is one Congress (two years). Ten turns run from 2027 to 2047.
    driver.
 5. **Next Congress.**
 
+## The debt snowball
+
+The game tracks the persistent national debt and makes the feedback loop
+visible: deficits heat the economy, the Fed hikes, bills reprice at once,
+interest is itself borrowed, and the debt grows faster.
+
+- **Debt panel** on the desk: total debt and debt/GDP, the credit rating,
+  and a bar splitting debt added since 2027 into spending vs. interest
+  (with a warning once interest outweighs spending). It also shows the
+  yearly interest bill (bills, which float with the Fed, vs. bonds, which
+  are locked in), **Fed exposure** (what a 1-pt hike adds per year: all
+  bills plus about a third of the bonds coming due next turn), and **Fed
+  vs. neutral**: extra interest paid (or saved) because the Fed sat above
+  (or below) its neutral rate of 2.75%. For bonds, the Fed's share is the
+  35% of the 10-year yield that tracks the Fed, fixed when the bond was sold.
+- **Newspaper:** the Fed tile shows the move in dollars ("bills cost
+  +$180B/yr"), and a debt story each turn reports the interest bill and the
+  Fed's part of it. The headline switches to "Treasury now borrows more for
+  interest than for new spending" once the snowball takes over.
+- **Credit ratings.** The U.S. starts at AA+, as rated today. Crossing
+  debt/GDP or interest/revenue thresholds costs a notch (AA, AA-, A+, A).
+  Each notch adds 0.2 pts to the term premium for good, plus a short-lived
+  market jolt. A downgrade leads the next paper. Upgrades need a clear
+  improvement and are rare.
+- **End screen:** where your new debt came from (spending vs. interest, and
+  the Fed's share), plus each strategy's final rating.
+
 The end screen replays the **same world** with three fixed strategies (all
 bills, balanced, mostly long) so the player can see what their choices
 actually changed, then recaps every event's lesson.
@@ -100,7 +127,8 @@ Deliberately simple, tuned for clear cause and effect rather than precision.
 | Fed rate | Taylor-style rule: neutral + inflation + 0.5×(inflation gap) + 0.5×(output gap), smoothed, rounded to 25 bp; QE in deep recessions, QT when inflation is high |
 | Bill yield | Fed rate + 0.1 + a small spread if bill supply exceeds bill demand |
 | 10-year yield | Expected Fed path + term premium |
-| Term premium | Base + debt/GDP + inflation uncertainty + supply pressure (bonds sold vs. buyer appetite) + interest-burden worry + event shocks |
+| Term premium | Base + debt/GDP + inflation uncertainty + supply pressure (bonds sold vs. buyer appetite) + interest-burden worry + event shocks + 0.2 per notch of credit downgrade |
+| Credit rating | Starts AA+. Next notch lost when debt/GDP passes 130/142/154/166% or interest/revenue passes 28/31/33/34%; regained only well below the previous threshold |
 | Failed auction | Bonds offered above 2× appetite: a strike plus a lasting term-premium shock |
 | Budget | Spending and revenue in % of GDP with automatic stabilizers; interest is computed on the actual stock (bills at today's rate, each bond vintage at its locked-in coupon) |
 
@@ -110,11 +138,15 @@ Across 400 random worlds:
 
 | Strategy | Survives |
 |---|---|
-| All bills | ~16% |
-| Balanced (35% long) | ~62% |
-| Mostly long (70%) | ~37% |
-| All long | ~11% |
-| Reading buyers and timing rates | ~67% |
+| All bills | ~17% |
+| Balanced (35% long) | ~57% |
+| Mostly long (70%) | ~32% |
+| All long | ~8% |
+| Reading buyers and timing rates | ~64% |
+
+Downgrades are common, as they have been in reality: about 80% of balanced
+runs lose at least one notch, while bills-heavy and bond-heavy runs fall
+further (often to A+ or below).
 
 Event sizes are checked against real episodes (each card names one): a
 recession takes unemployment from about 4% to 6% and growth below zero; an

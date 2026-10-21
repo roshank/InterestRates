@@ -66,6 +66,7 @@
   // and what it means for the Treasury, then headlines with optional detail.
   // Dismissing it shrinks the paper into the briefing panel on the desk.
   const range = (r) => '$' + r[0].toFixed(1) + '–' + r[1].toFixed(1) + 'T';
+  const billions = (t) => '$' + Math.round(t * 1000).toLocaleString('en-US') + 'B';
   const signed = (d, digits = 1) => (d >= 0 ? '+' : '−') + Math.abs(d).toFixed(digits);
   const delta = (d, eps, digits = 1, unit = '') =>
     Math.abs(d) < eps ? '■ no change' : arrow(d) + ' ' + signed(d, digits) + unit;
@@ -89,7 +90,8 @@
     tiles.push({
       label: 'Fed rate', value: pct(b.fed.rate, 2), delta: delta(df, 0.01, 2),
       tone: flat(df, 0.01) ? 'neutral' : df > 0 ? 'bad' : 'good',
-      effect: flat(df, 0.01) ? 'bill costs steady' : df > 0 ? 'bills cost more' : 'bills get cheaper',
+      effect: flat(df, 0.01) ? 'bill costs steady'
+        : (df > 0 ? 'bills cost +' : 'bills cost −') + billions(Math.abs(df) / 100 * b.need.rollShort) + '/yr',
     });
 
     const di = b.econ.inf - prev.inf;
@@ -129,6 +131,33 @@
       body: '<p><b>Why it matters:</b> ' + esc(e.lesson) + '</p>' +
         (e.example ? '<p class="example"><span class="label">Real world</span> ' + esc(e.example) + '</p>' : ''),
     }));
+
+    if (b.ratingNews) {
+      const r = b.ratingNews;
+      const story = {
+        kicker: 'Credit rating',
+        head: r.down ? 'U.S. downgraded to ' + r.to : 'U.S. credit rating upgraded to ' + r.to,
+        dek: r.down
+          ? 'A ratings agency cut the U.S. from ' + r.from + ', citing ' + (r.why === 'debt' ? 'a debt load that keeps climbing' : 'interest costs eating a growing share of the budget') + '.'
+          : 'A ratings agency raised the U.S. from ' + r.from + ' as debt and interest costs improved.',
+        body: '<p><b>Why it matters:</b> Each notch below AA+ makes buyers demand more yield on every bond you sell, for good. Downgrades also rattle markets for a while.</p>' +
+          '<p class="example"><span class="label">Real world</span> S&amp;P cut the U.S. to AA+ in 2011, Fitch in 2023, Moody\'s in 2025.</p>',
+      };
+      if (r.down) out.unshift(story); else out.push(story);
+    }
+
+    const n = b.need;
+    const snowball = n.interest > Math.max(0, n.primary);
+    const fedLine = b.fedCost > 0.05 ? ' The Fed holding rates above neutral adds ' + fmtT(b.fedCost) + ' of it.'
+      : b.fedCost < -0.05 ? ' The Fed holding rates below neutral saves ' + fmtT(-b.fedCost) + '.' : '';
+    out.push({
+      kicker: 'The debt',
+      head: snowball ? 'Treasury now borrows more for interest than for new spending'
+        : 'National debt passes $' + Math.floor(b.debtStart) + ' trillion',
+      dek: 'Interest will cost about ' + fmtT(n.interest) + ' this term, all of it borrowed.' + fedLine,
+      body: '<p><b>Why it matters:</b> Interest is paid with new debt, which then charges interest too. When rates are high or bills make up much of the debt, the snowball speeds up.</p>' +
+        '<p>Bills reprice to the Fed\'s rate every turn. Bonds keep the rate they were sold at until they mature.</p>',
+    });
 
     const df = b.fed.rate - b.fed.prev;
     out.push({
@@ -218,6 +247,7 @@
     renderBrief();
     renderNeed();
     renderAct();
+    renderDebt();
     renderMarket();
     renderBuyers();
   }
@@ -396,6 +426,39 @@
     });
   }
 
+  // The persistent debt: how big, where it came from, and how exposed the
+  // interest bill is to the Fed.
+  function renderDebt() {
+    const now = st.history.length ? st.history[st.history.length - 1] : st.initial;
+    const newDebt = now.fromSpending + now.fromInterest;
+    const ratingTone = now.ratingIdx <= 1 ? 'tone-neutral' : now.ratingIdx <= 3 ? 'tone-warn' : 'tone-bad';
+    const spend = Math.max(0, now.fromSpending);
+    const tot = spend + now.fromInterest || 1;
+    const fed = now.fedCost;
+    const snowball = now.fromInterest > spend && newDebt > 0;
+    $('#debt').innerHTML =
+      '<span class="label">National debt</span>' +
+      '<div class="debthead"><span class="big num">' + fmtT(now.debt) + '</span>' +
+      '<span class="debtmeta">' + pct(now.debtRatio, 0) + ' of GDP <span class="pill ' + ratingTone + '" title="Credit rating">' + now.rating + '</span></span></div>' +
+      (newDebt > 0
+        ? '<div class="growth"><span class="label">Added since ' + R.START_YEAR + ': ' + fmtT(newDebt) + '</span>' +
+          '<div class="stack" role="img" aria-label="New debt from spending versus interest">' +
+          '<span style="width:' + (spend / tot * 100) + '%;background:var(--fedc)"></span>' +
+          '<span style="width:' + (now.fromInterest / tot * 100) + '%;background:var(--bad)"></span></div>' +
+          '<div class="legend"><span><i style="background:var(--fedc)"></i>Spending <span class="num">' + fmtT(spend) + '</span></span>' +
+          '<span><i style="background:var(--bad)"></i>Interest <span class="num">' + fmtT(now.fromInterest) + '</span></span></div>' +
+          (snowball ? '<p class="callout tone-bad">More of your new debt is interest than spending. That\'s the snowball.</p>' : '') +
+          '</div>'
+        : '<p class="muted">No new debt yet. Your first auction is coming up.</p>') +
+      '<dl class="facts">' +
+      '<div><dt>Interest bill</dt><dd><span class="num">' + billions(now.billInt + now.bondInt) + '/yr</span>' +
+        '<span class="sub"><span class="bills">' + billions(now.billInt) + ' on bills</span> (moves with the Fed) · <span class="bonds">' + billions(now.bondInt) + ' on bonds</span> (locked in)</span></dd></div>' +
+      '<div><dt>Fed exposure</dt><dd><span class="num">' + billions(now.exposureB / 1000) + '/yr</span><span class="sub">added by each 1-pt Fed hike</span></dd></div>' +
+      '<div><dt>Fed vs. neutral</dt><dd><span class="num ' + (fed > 0.05 ? 'tone-bad' : fed < -0.05 ? 'tone-good' : '') + '">' + (Math.abs(fed) < 0.05 ? 'about even' : (fed > 0 ? '+' : '−') + fmtT(Math.abs(fed))) + '</span>' +
+        '<span class="sub">' + (fed > 0.05 ? 'extra interest from rates above ' : fed < -0.05 ? 'interest saved by rates below ' : 'rates near ') + 'neutral (' + R.FED_NEUTRAL.toFixed(2) + '%)</span></dd></div>' +
+      '</dl>';
+  }
+
   function renderMarket() {
     const pts = [st.initial].concat(st.history);
     const xs = pts.map((p) => p.year);
@@ -423,7 +486,6 @@
       rates +
       '<span class="label subhead" style="display:block">Interest / revenue</span>' + burden +
       '<div class="metrics">' +
-      '<div><span class="label">Debt / GDP</span><span class="num">' + pct(now.debtRatio, 0) + '</span></div>' +
       '<div><span class="label">In bills</span><span class="num">' + pct(now.shortShareOfDebt, 0) + '</span></div>' +
       '<div><span class="label">Avg maturity</span><span class="num">' + now.avgMaturity.toFixed(1) + ' yrs</span></div>' +
       '</div>';
@@ -486,6 +548,14 @@
     return (s.lossReason === 'auctions' ? 'Buyers\' strike ' : 'Fiscal crisis ') + yr;
   }
 
+  function debtStory(s) {
+    const spend = Math.max(0, s.fromSpending);
+    let t = 'Of the ' + fmtT(spend + s.fromInterest) + ' you added to the debt, ' + fmtT(spend) + ' paid for spending and ' + fmtT(s.fromInterest) + ' paid interest';
+    if (Math.abs(s.fedCost) >= 0.05) t += s.fedCost > 0 ? ' (' + fmtT(s.fedCost) + ' of that because the Fed held rates above neutral)' : ' (below-neutral Fed rates saved you ' + fmtT(-s.fedCost) + ')';
+    t += '. Credit rating: ' + R.RATINGS[s.rating] + '.';
+    return t;
+  }
+
   function showEnd() {
     const you = st;
     const rows = [{ name: 'You', s: you, you: true }].concat(
@@ -517,13 +587,15 @@
       '<span class="verdict ' + tone + '">' + verdict + '</span>' +
       '<h2 id="endTitle">' + title + '</h2>' +
       '<p class="lead">' + lossLesson + '</p>' +
+      '<p>' + debtStory(you) + '</p>' +
       '<div><span class="label">Same world, same events: only the borrowing strategy differs</span>' +
-      '<div class="tablewrap"><table class="cmp"><thead><tr><th>Strategy</th><th>Outcome</th><th class="r">Interest paid</th><th class="r">Debt/GDP</th><th class="r">Interest/revenue</th></tr></thead><tbody>' +
+      '<div class="tablewrap"><table class="cmp"><thead><tr><th>Strategy</th><th>Outcome</th><th class="r">Interest paid</th><th class="r">Debt/GDP</th><th class="r">Interest/revenue</th><th class="r">Rating</th></tr></thead><tbody>' +
       rows.map((r) => '<tr class="' + (r.you ? 'you' : '') + '"><td>' + esc(r.name) + '</td>' +
         '<td class="' + (r.s.won ? 'tone-good' : 'tone-bad') + '">' + outcomeText(r.s) + '</td>' +
         '<td class="r num">' + fmtT(r.s.interestPaid) + '</td>' +
         '<td class="r num">' + pct(r.s.debt / r.s.gdp * 100, 0) + '</td>' +
-        '<td class="r num' + (best !== null && r.s.won && r.s.intRev === best ? ' tone-good' : '') + '">' + pct(r.s.intRev) + '</td></tr>').join('') +
+        '<td class="r num' + (best !== null && r.s.won && r.s.intRev === best ? ' tone-good' : '') + '">' + pct(r.s.intRev) + '</td>' +
+        '<td class="r num">' + R.RATINGS[r.s.rating] + '</td></tr>').join('') +
       '</tbody></table></div></div>' +
       '<div><span class="label">What you lived through</span><ul class="recap" style="margin-top:8px">' +
       seen.map((id) => { const e = R.BY_ID[id]; return '<li><b>' + esc(e.title) + '</b>' + esc(e.lesson) + '</li>'; }).join('') +
