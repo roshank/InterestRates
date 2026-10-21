@@ -84,3 +84,24 @@ test('true auction demand stays near the published estimate', () => {
     }
   }
 });
+
+test('new debt is fully explained by spending plus interest', () => {
+  for (let s = 1; s <= 50; s++) {
+    const world = R.createWorld(s);
+    const st = R.newGame(world);
+    const start = st.debt;
+    while (!st.over) { R.beginTurn(st, world); R.resolveTurn(st, 0.35); }
+    assert.ok(Math.abs(start + st.fromSpending + st.fromInterest - st.debt) < 1e-6);
+  }
+});
+
+test('a downgrade raises the term premium on later auctions', () => {
+  const world = R.createWorld(11);
+  const a = R.newGame(world); R.beginTurn(a, world);
+  const b = R.newGame(world); R.beginTurn(b, world);
+  b.rating += 2; // two notches below AA+
+  const ra = R.resolveTurn(a, 0.35);
+  const rb = R.resolveTurn(b, 0.35);
+  assert.ok(rb.tp.rating > ra.tp.rating);
+  assert.ok(rb.y10 > ra.y10 + 0.3);
+});
